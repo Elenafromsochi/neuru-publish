@@ -9,8 +9,7 @@ jobs:
   post:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -18,92 +17,13 @@ jobs:
         env:
           WORKER_URL: https://neuru-telegram-proxy.levshina900.workers.dev
           WORKER_SECRET: ${{ secrets.WORKER_SECRET }}
-          CHANNEL: "@HotelAI_ru"
+        run: python3 .github/scripts/post_telegram.py
+
+      - name: Save state
+        if: success()
         run: |
-          DATE=$(TZ='Europe/Moscow' date '+%d.%m.%Y')
-          FOLDER="social/posting/$DATE/dzen"
-          STATE_FILE="$FOLDER/state-dzen.json"
-
-          echo "Date: $DATE, Folder: $FOLDER"
-
-          if [ ! -d "$FOLDER" ]; then
-            echo "No approved posts folder found"
-            exit 0
-          fi
-
-          PUBLISHED="[]"
-          if [ -f "$STATE_FILE" ]; then
-            PUBLISHED=$(python3 -c "import json; d=json.load(open('$STATE_FILE')); print(json.dumps(d.get('published',[])))")
-          fi
-
-          NEXT_FILE=""
-          NEXT_NUM=0
-          for f in $(ls $FOLDER/post-*.md 2>/dev/null | sort -V); do
-            n=$(basename $f | sed 's/post-\([0-9]*\)\.md/\1/')
-            already=$(python3 -c "import json; p=json.loads('$PUBLISHED'); print('true' if $n in p else 'false')")
-            if [ "$already" = "false" ]; then
-              NEXT_FILE=$f
-              NEXT_NUM=$n
-              break
-            fi
-          done
-
-          if [ -z "$NEXT_FILE" ]; then
-            echo "All approved posts published"
-            exit 0
-          fi
-
-          echo "Publishing post #$NEXT_NUM from $NEXT_FILE"
-
-          TEXT=$(python3 -c "
-import re, sys
-text = open('$NEXT_FILE').read()
-lines = text.split('\n')
-if lines and lines[0].startswith('# '):
-    lines = lines[1:]
-text = '\n'.join(lines).strip()
-text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)
-text = re.sub(r'_(.+?)_', r'<i>\1</i>', text)
-text = re.sub(r'^#{1,3}\s+(.+)$', r'<b>\1</b>', text, flags=re.MULTILINE)
-text = re.sub(r'^\-\s+', '• ', text, flags=re.MULTILINE)
-text = re.sub(r'\[(.+?)\]\((.+?)\)', r'<a href=\"\2\">\1</a>', text)
-text = re.sub(r'\n{3,}', '\n\n', text)
-if len(text) > 4096:
-    text = text[:4090] + '...'
-import json
-print(json.dumps(text))
-")
-
-          BODY=$(python3 -c "
-import json
-payload = {'method': 'sendMessage', 'params': {'chat_id': '$CHANNEL', 'text': $TEXT, 'parse_mode': 'HTML'}}
-print(json.dumps(payload))
-")
-
-          RESPONSE=$(curl -s -o /tmp/tg_response.json -w "%{http_code}" -X POST "$WORKER_URL" \
-            -H "Content-Type: application/json" \
-            -H "X-Worker-Secret: $WORKER_SECRET" \
-            -d "$BODY")
-
-          echo "HTTP: $RESPONSE"
-          cat /tmp/tg_response.json
-
-          TG_OK=$(python3 -c "import json; d=json.load(open('/tmp/tg_response.json')); print(str(d.get('ok',False)).lower())" 2>/dev/null || echo "false")
-
-          if [ "$RESPONSE" = "200" ] && [ "$TG_OK" = "true" ]; then
-            echo "Published successfully"
-            NEW_PUB=$(python3 -c "import json; p=json.loads('$PUBLISHED'); p.append($NEXT_NUM); print(json.dumps(sorted(p)))")
-            python3 -c "
-import json
-state = {'date': '$DATE', 'platform': 'dzen', 'published': json.loads('$NEW_PUB'), 'last_post': $NEXT_NUM}
-open('$STATE_FILE', 'w').write(json.dumps(state, ensure_ascii=False, indent=2))
-"
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add "$STATE_FILE"
-            git commit -m "posted: dzen post $NEXT_NUM for $DATE"
-            git push
-          else
-            echo "Failed to publish"
-            exit 1
-          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --staged --quiet || git commit -m "posted: dzen"
+          git push
