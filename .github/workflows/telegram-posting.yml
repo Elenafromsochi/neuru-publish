@@ -2,147 +2,108 @@ name: Telegram Posting
 
 on:
   schedule:
-    # Каждый час с 09:00 до 19:00 UTC (12:00-22:00 МСК)
     - cron: '0 9-19 * * *'
-  workflow_dispatch: # ручной запуск для теста
+  workflow_dispatch:
 
 jobs:
   post:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Find and publish next post
+      - name: Post to Telegram
         env:
           WORKER_URL: https://neuru-telegram-proxy.levshina900.workers.dev
           WORKER_SECRET: ${{ secrets.WORKER_SECRET }}
           CHANNEL: "@HotelAI_ru"
         run: |
-          set -e
-          
-          # Текущая дата в формате ДД.ММ.ГГГГ (московское время UTC+3)
           DATE=$(TZ='Europe/Moscow' date '+%d.%m.%Y')
           FOLDER="social/posting/$DATE/dzen"
           STATE_FILE="$FOLDER/state-dzen.json"
-          
-          echo "📅 Дата: $DATE"
-          echo "📁 Папка: $FOLDER"
-          
-          # Проверяем существует ли папка с постами
+
+          echo "Date: $DATE, Folder: $FOLDER"
+
           if [ ! -d "$FOLDER" ]; then
-            echo "❌ Папка $FOLDER не найдена — нет одобренных постов"
+            echo "No approved posts folder found"
             exit 0
           fi
-          
-          # Читаем уже опубликованные посты из state файла
+
           PUBLISHED="[]"
           if [ -f "$STATE_FILE" ]; then
-            PUBLISHED=$(jq '.published' "$STATE_FILE")
-            echo "📊 Уже опубликованы: $PUBLISHED"
+            PUBLISHED=$(python3 -c "import json; d=json.load(open('$STATE_FILE')); print(json.dumps(d.get('published',[])))")
           fi
-          
-          # Находим следующий пост для публикации
+
           NEXT_FILE=""
           NEXT_NUM=0
-          
-          for post_file in $(ls "$FOLDER"/post-*.md 2>/dev/null | sort -V); do
-            num=$(basename "$post_file" | sed 's/post-\([0-9]*\)\.md/\1/')
-            already=$(echo "$PUBLISHED" | jq "contains([$num])")
+          for f in $(ls $FOLDER/post-*.md 2>/dev/null | sort -V); do
+            n=$(basename $f | sed 's/post-\([0-9]*\)\.md/\1/')
+            already=$(python3 -c "import json; p=json.loads('$PUBLISHED'); print('true' if $n in p else 'false')")
             if [ "$already" = "false" ]; then
-              NEXT_FILE="$post_file"
-              NEXT_NUM=$num
+              NEXT_FILE=$f
+              NEXT_NUM=$n
               break
             fi
           done
-          
+
           if [ -z "$NEXT_FILE" ]; then
-            echo "✅ Все одобренные посты уже опубликованы"
+            echo "All approved posts published"
             exit 0
           fi
-          
-          echo "📝 Публикуем: $NEXT_FILE (пост №$NEXT_NUM)"
-          
-          # Читаем текст поста
-          RAW_TEXT=$(cat "$NEXT_FILE")
-          
-          # Конвертируем markdown в HTML для Telegram
-          TEXT=$(echo "$RAW_TEXT" | python3 - << 'PYEOF'
-import sys, re
 
-text = sys.stdin.read()
+          echo "Publishing post #$NEXT_NUM from $NEXT_FILE"
 
-# Убираем заголовок файла (первая строка с #)
+          TEXT=$(python3 -c "
+import re, sys
+text = open('$NEXT_FILE').read()
 lines = text.split('\n')
 if lines and lines[0].startswith('# '):
     lines = lines[1:]
 text = '\n'.join(lines).strip()
-
-# Конвертируем markdown → Telegram HTML
 text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)
 text = re.sub(r'_(.+?)_', r'<i>\1</i>', text)
 text = re.sub(r'^#{1,3}\s+(.+)$', r'<b>\1</b>', text, flags=re.MULTILINE)
 text = re.sub(r'^\-\s+', '• ', text, flags=re.MULTILINE)
-text = re.sub(r'\[(.+?)\]\((.+?)\)', r'<a href="\2">\1</a>', text)
-text = re.sub(r'`(.+?)`', r'\1', text)
+text = re.sub(r'\[(.+?)\]\((.+?)\)', r'<a href=\"\2\">\1</a>', text)
 text = re.sub(r'\n{3,}', '\n\n', text)
-
-# Обрезаем до 4096 символов
 if len(text) > 4096:
     text = text[:4090] + '...'
+import json
+print(json.dumps(text))
+")
 
-print(text, end='')
-PYEOF
-          )
-          
-          echo "📤 Отправляем в Telegram..."
-          
-          # Отправляем через Cloudflare Worker
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$WORKER_URL" \
+          BODY=$(python3 -c "
+import json
+payload = {'method': 'sendMessage', 'params': {'chat_id': '$CHANNEL', 'text': $TEXT, 'parse_mode': 'HTML'}}
+print(json.dumps(payload))
+")
+
+          RESPONSE=$(curl -s -o /tmp/tg_response.json -w "%{http_code}" -X POST "$WORKER_URL" \
             -H "Content-Type: application/json" \
             -H "X-Worker-Secret: $WORKER_SECRET" \
-            -d "{\"method\":\"sendMessage\",\"params\":{\"chat_id\":\"$CHANNEL\",\"text\":$(echo "$TEXT" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),\"parse_mode\":\"HTML\"}}")
-          
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          BODY=$(echo "$RESPONSE" | head -n -1)
-          
-          echo "📊 HTTP код: $HTTP_CODE"
-          echo "📊 Ответ: $BODY"
-          
-          if [ "$HTTP_CODE" = "200" ]; then
-            TG_OK=$(echo "$BODY" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("ok","false"))' 2>/dev/null || echo "false")
-            
-            if [ "$TG_OK" = "True" ] || [ "$TG_OK" = "true" ]; then
-              echo "✅ Пост №$NEXT_NUM опубликован!"
-              
-              # Обновляем state файл
-              NEW_PUBLISHED=$(echo "$PUBLISHED" | python3 -c "import json,sys; p=json.load(sys.stdin); p.append($NEXT_NUM); print(json.dumps(sorted(p)))")
-              
-              python3 -c "
+            -d "$BODY")
+
+          echo "HTTP: $RESPONSE"
+          cat /tmp/tg_response.json
+
+          TG_OK=$(python3 -c "import json; d=json.load(open('/tmp/tg_response.json')); print(str(d.get('ok',False)).lower())" 2>/dev/null || echo "false")
+
+          if [ "$RESPONSE" = "200" ] && [ "$TG_OK" = "true" ]; then
+            echo "Published successfully"
+            NEW_PUB=$(python3 -c "import json; p=json.loads('$PUBLISHED'); p.append($NEXT_NUM); print(json.dumps(sorted(p)))")
+            python3 -c "
 import json
-state = {
-    'date': '$DATE',
-    'platform': 'dzen',
-    'published': json.loads('$NEW_PUBLISHED'),
-    'last_post': $NEXT_NUM
-}
-print(json.dumps(state, ensure_ascii=False, indent=2))
-" > "$STATE_FILE"
-              
-              git config user.name "github-actions[bot]"
-              git config user.email "github-actions[bot]@users.noreply.github.com"
-              git add "$STATE_FILE"
-              git commit -m "posted: dzen пост $NEXT_NUM за $DATE"
-              git push
-              
-            else
-              echo "❌ Telegram вернул ошибку: $BODY"
-              exit 1
-            fi
+state = {'date': '$DATE', 'platform': 'dzen', 'published': json.loads('$NEW_PUB'), 'last_post': $NEXT_NUM}
+open('$STATE_FILE', 'w').write(json.dumps(state, ensure_ascii=False, indent=2))
+"
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add "$STATE_FILE"
+            git commit -m "posted: dzen post $NEXT_NUM for $DATE"
+            git push
           else
-            echo "❌ Worker вернул HTTP $HTTP_CODE: $BODY"
+            echo "Failed to publish"
             exit 1
           fi
