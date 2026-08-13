@@ -16,7 +16,7 @@ jobs:
       - name: Post to Telegram
         env:
           WORKER_URL: https://neuru-telegram-proxy.levshina900.workers.dev
-          WORKER_SECRET: ${{ secrets.WORKER_SECRET }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: python3 .github/scripts/post_telegram.py
 
       - name: Save state
