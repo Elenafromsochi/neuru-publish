@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>НЭЙРУ · Админ-панель</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --blue:#2563EB; --violet:#7C3AED; --bg:#F4F6FB; --card:#FFFFFF;
+    --ink:#0F172A; --muted:#64748B; --line:#E2E8F0; --line2:#EEF2F7;
+    --ok:#16A34A; --warn:#D97706;
+    --grad:linear-gradient(135deg,var(--blue),var(--violet));
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  code,.mono{font-family:'JetBrains Mono',monospace}
+
+  /* Layout */
+  .wrap{display:grid;grid-template-columns:248px 1fr;min-height:100vh}
+  .sb{background:var(--card);border-right:1px solid var(--line);padding:20px 14px;
+    position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:4px}
+  .brand{display:flex;align-items:center;gap:10px;padding:6px 8px 18px}
+  .brand-logo{width:38px;height:38px;border-radius:10px;background:var(--grad);
+    display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;
+    overflow:hidden}
+  .brand-logo img{width:100%;height:100%;object-fit:cover}
+  .brand-name{font-weight:700;font-size:15px;line-height:1.1}
+  .brand-sub{font-size:11px;color:var(--muted)}
+  .nav{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;
+    color:var(--muted);font-size:14px;font-weight:500;cursor:pointer;border:none;
+    background:none;text-align:left;width:100%}
+  .nav:hover{background:var(--line2);color:var(--ink)}
+  .nav.active{background:#EFF3FF;color:var(--blue);font-weight:600}
+  .nav svg{width:18px;height:18px;flex:none}
+  .sb-foot{margin-top:auto;font-size:11px;color:var(--muted);padding:10px 8px;line-height:1.5}
+
+  .main{padding:26px 30px 60px;max-width:960px}
+  .page-h{font-size:22px;font-weight:800;letter-spacing:-.02em;margin:0 0 4px}
+  .page-sub{color:var(--muted);font-size:14px;margin:0 0 22px}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:20px;margin-bottom:16px}
+  .card-h{font-weight:700;font-size:15px;margin:0 0 3px}
+  .card-sub{color:var(--muted);font-size:13px;margin:0 0 14px}
+
+  .dept-label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;
+    color:var(--muted);font-weight:600;margin:18px 0 8px}
+  .agent{border:1px solid var(--line);border-radius:11px;margin-bottom:10px;overflow:hidden}
+  .agent-h{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:13px 15px;cursor:pointer;user-select:none}
+  .agent-h:hover{background:var(--line2)}
+  .agent-name{font-weight:600;font-size:14px;display:flex;align-items:center;gap:9px}
+  .dot{width:9px;height:9px;border-radius:50%;flex:none}
+  .chev{color:var(--muted);transition:transform .15s}
+  .agent.open .chev{transform:rotate(90deg)}
+  .agent-body{display:none;padding:0 15px 15px;border-top:1px solid var(--line2)}
+  .agent.open .agent-body{display:block}
+  textarea{width:100%;min-height:180px;border:1px solid var(--line);border-radius:9px;
+    padding:12px;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.55;
+    resize:vertical;color:var(--ink);background:#FCFDFE;margin-top:12px}
+  textarea:focus,input:focus,select:focus{outline:2px solid #BFD3FF;border-color:var(--blue)}
+
+  label{font-size:13px;font-weight:600;display:block;margin:14px 0 6px}
+  .hint{font-size:12px;color:var(--muted);margin-top:5px;line-height:1.5}
+  input[type=text],input[type=password],select{width:100%;border:1px solid var(--line);
+    border-radius:9px;padding:10px 12px;font-size:14px;font-family:inherit;background:#FCFDFE;color:var(--ink)}
+
+  .btn{background:var(--grad);color:#fff;border:none;border-radius:9px;padding:10px 18px;
+    font-weight:600;font-size:14px;cursor:pointer;font-family:inherit}
+  .btn:hover{filter:brightness(1.06)}
+  .btn.ghost{background:none;color:var(--blue);border:1px solid var(--line)}
+  .btn.ghost:hover{background:var(--line2);filter:none}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .row.end{justify-content:flex-end}
+
+  /* Provider grid */
+  .prov-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:6px}
+  .prov{border:1.5px solid var(--line);border-radius:11px;padding:14px;cursor:pointer;position:relative}
+  .prov:hover{border-color:#C7D6FF}
+  .prov.sel{border-color:var(--blue);background:#F5F8FF}
+  .prov-n{font-weight:700;font-size:14px}
+  .prov-m{font-size:12px;color:var(--muted);margin-top:2px}
+  .prov .badge{position:absolute;top:10px;right:10px;font-size:10px;font-weight:700;
+    padding:2px 7px;border-radius:20px}
+  .b-rub{background:#ECFDF5;color:#059669}
+  .b-usd{background:#EFF6FF;color:#2563EB}
+  .prov.sel::after{content:'✓';position:absolute;bottom:10px;right:12px;color:var(--blue);font-weight:800}
+
+  /* Logo uploader */
+  .logo-box{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+  .logo-prev{width:88px;height:88px;border-radius:16px;border:1px dashed var(--line);
+    display:flex;align-items:center;justify-content:center;background:#FCFDFE;overflow:hidden}
+  .logo-prev img{width:100%;height:100%;object-fit:cover}
+  .logo-prev.grad{background:var(--grad);color:#fff;font-weight:800;font-size:32px;border-style:solid}
+
+  /* Tokens */
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;margin-bottom:16px}
+  .seg button{border:none;background:none;padding:8px 15px;font-size:13px;font-weight:600;
+    cursor:pointer;color:var(--muted);font-family:inherit}
+  .seg button.on{background:var(--blue);color:#fff}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  .kpi{border:1px solid var(--line);border-radius:12px;padding:16px}
+  .kpi-l{font-size:12px;color:var(--muted);font-weight:600}
+  .kpi-v{font-size:24px;font-weight:800;letter-spacing:-.02em;margin-top:4px}
+  .kpi-s{font-size:12px;color:var(--muted);margin-top:2px}
+  table{width:100%;border-collapse:collapse;margin-top:16px;font-size:13px}
+  th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line2)}
+  th{color:var(--muted);font-weight:600;font-size:12px}
+  td.num{text-align:right;font-family:'JetBrains Mono',monospace}
+  .empty{border:1px dashed var(--line);border-radius:12px;padding:26px;text-align:center;
+    color:var(--muted);font-size:13px;margin-top:14px}
+
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--ink);color:#fff;padding:11px 20px;border-radius:10px;font-size:13px;
+    font-weight:500;opacity:0;transition:.25s;pointer-events:none;z-index:50}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .note{background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:12px 14px;
+    font-size:12.5px;color:#92400E;line-height:1.55;margin-top:14px}
+
+  .page{display:none} .page.on{display:block}
+  @media(max-width:760px){
+    .wrap{grid-template-columns:1fr}
+    .sb{position:static;height:auto;flex-direction:row;flex-wrap:wrap;border-right:none;border-bottom:1px solid var(--line)}
+    .sb-foot{display:none} .brand{width:100%}
+    .nav{width:auto}
+    .main{padding:20px 16px 50px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <aside class="sb">
+    <div class="brand">
+      <div class="brand-logo" id="brandLogo">Н</div>
+      <div>
+        <div class="brand-name" id="brandName">НЭЙРУ</div>
+        <div class="brand-sub">Админ-панель</div>
+      </div>
+    </div>
+    <button class="nav active" data-p="prompts">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+      Промпты агентов</button>
+    <button class="nav" data-p="provider">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 9h6v6H9z"/></svg>
+      Провайдер ИИ</button>
+    <button class="nav" data-p="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>
+      Логотип</button>
+    <button class="nav" data-p="tokens">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m7 14 3-3 3 3 5-5"/></svg>
+      Расход токенов</button>
+    <div class="sb-foot">
+      Настройки хранятся в этом браузере и (при подключённом токене) в репозитории.
+      Панель — white-label: смени логотип и название под каждого клиента.
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- ПРОМПТЫ -->
+    <section class="page on" id="p-prompts">
+      <h1 class="page-h">Промпты агентов</h1>
+      <p class="page-sub">Все текущие инструкции агентов. Открой любого, отредактируй и сохрани.</p>
+
+      <div class="dept-label">Над отделами</div>
+      <div id="grp-top"></div>
+      <div class="dept-label">Отдел рассылок</div>
+      <div id="grp-email"></div>
+      <div class="dept-label">Отдел публикаций</div>
+      <div id="grp-pub"></div>
+
+      <div class="row end" style="margin-top:16px">
+        <button class="btn ghost" onclick="resetPrompts()">Вернуть исходные</button>
+        <button class="btn" onclick="savePrompts()">Сохранить промпты</button>
+      </div>
+      <div class="note">Кнопка сохраняет в браузер сразу. Чтобы промпты применились в агентах,
+        нужно, чтобы движок читал их из папки <code>prompts/</code> — при подключённом GitHub-токене
+        панель сможет записывать их прямо туда (кнопку синхронизации добавим на следующем шаге).</div>
+    </section>
+
+    <!-- ПРОВАЙДЕР -->
+    <section class="page" id="p-provider">
+      <h1 class="page-h">Провайдер ИИ</h1>
+      <p class="page-sub">Какая модель обрабатывает запросы агентов. Можно менять под клиента и бюджет.</p>
+      <div class="card">
+        <div class="card-h">Выбор провайдера</div>
+        <div class="card-sub">GigaChat и YandexGPT оплачиваются рублями из РФ без карты и VPN — удобно для российских клиентов.</div>
+        <div class="prov-grid" id="provGrid"></div>
+
+        <label>API-ключ / токен доступа</label>
+        <input type="password" id="apiKey" placeholder="Вставь ключ выбранного провайдера">
+        <div class="hint" id="keyHint"></div>
+
+        <label>Модель</label>
+        <input type="text" id="modelName" placeholder="например, claude-sonnet-4-6">
+        <div class="hint">Для дорогих объёмных задач (публикации) можно ставить модель подешевле, для качества — помощнее.</div>
+
+        <div class="row end" style="margin-top:16px"><button class="btn" onclick="saveProvider()">Сохранить провайдера</button></div>
+      </div>
+    </section>
+
+    <!-- ЛОГОТИП -->
+    <section class="page" id="p-logo">
+      <h1 class="page-h">Логотип и название</h1>
+      <p class="page-sub">Оформление под конкретную компанию. Меняется на лету — для перепродажи платформы.</p>
+      <div class="card">
+        <div class="logo-box">
+          <div class="logo-prev grad" id="logoPrev">Н</div>
+          <div>
+            <div class="row">
+              <button class="btn ghost" onclick="document.getElementById('logoFile').click()">Загрузить логотип</button>
+              <button class="btn ghost" onclick="clearLogo()">Убрать</button>
+            </div>
+            <div class="hint">PNG или SVG, квадратный. Появится в шапке панели и дашборда.</div>
+            <input type="file" id="logoFile" accept="image/*" style="display:none" onchange="onLogo(event)">
+          </div>
+        </div>
+        <label>Название компании</label>
+        <input type="text" id="companyName" placeholder="НЭЙРУ" oninput="liveName()">
+        <div class="row end" style="margin-top:16px"><button class="btn" onclick="saveBranding()">Сохранить оформление</button></div>
+      </div>
+    </section>
+
+    <!-- ТОКЕНЫ -->
+    <section class="page" id="p-tokens">
+      <h1 class="page-h">Расход токенов</h1>
+      <p class="page-sub">Сколько токенов и денег потратили агенты. Выбери период.</p>
+      <div class="seg" id="periodSeg">
+        <button data-r="day" class="on">День</button>
+        <button data-r="week">Неделя</button>
+        <button data-r="month">Месяц</button>
+        <button data-r="all">Всё</button>
+      </div>
+      <div class="kpis">
+        <div class="kpi"><div class="kpi-l">Входные токены</div><div class="kpi-v" id="kIn">0</div><div class="kpi-s">за период</div></div>
+        <div class="kpi"><div class="kpi-l">Выходные токены</div><div class="kpi-v" id="kOut">0</div><div class="kpi-s">за период</div></div>
+        <div class="kpi"><div class="kpi-l">Оценка стоимости</div><div class="kpi-v" id="kCost">$0</div><div class="kpi-s" id="kCostSub">по тарифу модели</div></div>
+      </div>
+      <div id="tokTable"></div>
+      <div class="empty" id="tokEmpty">
+        Данных пока нет. Счётчик заполнится, когда агенты начнут работать: движок будет писать
+        расход каждого запуска в журнал <code>usage/</code>, а панель — показывать его здесь по периодам.
+      </div>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ---------- storage (безопасно и в песочнице, и на GitHub Pages) ----------
+const store = {
+  get(k,d){ try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch(e){return (mem[k]??d);} },
+  set(k,v){ try{localStorage.setItem(k,JSON.stringify(v));}catch(e){mem[k]=v;} }
+};
+const mem = {};
+
+// ---------- дефолтные промпты (текущие, реконструированные) ----------
+const AGENTS = [
+  {id:'novostnik', grp:'top', name:'ИИ-Новостник', color:'#2563EB',
+   prompt:`Ты — ИИ-новостник департамента лидогенерации. Через веб-поиск собери за сутки 5–8 свежих новостей, релевантных аудитории (отельеры) и продажам. Тегируй: ИИ | Отрасль | Рынок. По каждой: ЧТО ПРОИЗОШЛО, КОНКРЕТИКА (реальные цифры), ПОЧЕМУ БОЛЬ ОТЕЛЬЕРА, УГОЛ ДЛЯ ПИСЬМА/ПОСТА, СИЛА ДЛЯ НАС. Не выдумывать цифры. По-русски.`},
+
+  {id:'email-strateg', grp:'email', name:'ИИ-Стратег', color:'#7C3AED',
+   prompt:`Ты — ИИ-стратег отдела рассылок. На вход — дайджест новостей. Предложи стратегию рассылки: главный инфоповод и угол, 2–3 темы письма, ключевое сообщение и CTA, сегмент базы, тезисный план. Коротко — это бриф для копирайтера. По-русски.`},
+  {id:'email-copywriter', grp:'email', name:'ИИ-Копирайтер', color:'#7C3AED',
+   prompt:`Ты — копирайтер отдела рассылок. На вход — бриф стратега. Напиши готовое письмо: цепляющая тема и прехедер, крючок, польза, мягкий оффер, ясный CTA. 150–300 слов, живой экспертный тон, без канцелярита. По-русски.`},
+  {id:'email-analyst', grp:'email', name:'ИИ-Аналитик', color:'#7C3AED',
+   prompt:`Ты — аналитик отдела рассылок. На вход — статистика кампаний (open rate, CTR, отписки, конверсии). Дай разбор по цифрам: что сработало, гипотезы, 3–5 рекомендаций на следующую рассылку, один A/B-эксперимент. По-русски.`},
+
+  {id:'pub-interviewer', grp:'pub', name:'ИИ-Интервьюер', color:'#0EA5E9',
+   prompt:`Ты — ИИ-интервьюер отдела публикаций. (Роль пока не финализирована.) Задача-заготовка: провести интервью с экспертом-отельером и собрать из ответов фактуру и живые истории для будущих публикаций. Задавай по одному вопросу, углубляйся в детали и кейсы. По-русски.`},
+  {id:'pub-strateg', grp:'pub', name:'ИИ-Стратег-Публицист', color:'#0EA5E9',
+   prompt:`Ты — стратег-публицист. На вход — новости недели с тегами и «силой». Составь стратегию публикаций на неделю для площадок (Дзен, MITT, ТенЧат, VC, ВК, Welcome): сводка инфоповодов, распределение публикаций по силе, по каждому — угол, крючок, мысль, тип CTA. Голос — от первого лица, эксперт-отельер. По-русски.`},
+  {id:'pub-copywriter', grp:'pub', name:'ИИ-Копирайтер-Публицист', color:'#0EA5E9',
+   prompt:`Ты — копирайтер-публицист. На вход — площадка и стратегия недели. Напиши готовые публикации под площадку (сколько задано, ориентир 10): заголовок, текст (сцена-крючок → разбор → польза → оффер → CTA), хэштеги, промпт для картинки. Голос — эксперт-отельер, живые разборы звонков. Не выдумывать цифры. По-русски.
+
+ДЛИНА ПОД ПЛОЩАДКУ (обязательно соблюдать, указывай число знаков у каждой публикации):
+• Telegram — до 3500 знаков. Жёсткий лимит ТГ — 4096 в одном сообщении; оставляй запас на подпись и ссылку. НЕ превышать.
+• Дзен — 4000–8000 знаков (статья). Если материал дублируется в Telegram (синхронизация Дзен→ТГ) — сделай отдельную короткую ТГ-версию до 3500 знаков.
+• ВКонтакте — 1000–2500 знаков.
+• VC.ru — 3000–8000 знаков (лонгрид).
+• ТенЧат — 1000–3000 знаков.
+• MITT Connect — 2000–4000 знаков.
+• Welcome Times — 3000–6000 знаков.`},
+  {id:'pub-posting', grp:'pub', name:'ИИ-Постинг', color:'#0EA5E9',
+   prompt:`Ты — публикатор. На вход — готовые посты. Финальная вычитка под площадку, проверка крючка/пользы/оффера/CTA/хэштегов, время публикации. Пометь «Готово». (Сама выкладка в ТГ/Дзен/ВК делается интеграцией, не моделью.) По-русски.`}
+];
+
+let prompts = store.get('neuru_prompts', {});
+AGENTS.forEach(a=>{ if(!(a.id in prompts)) prompts[a.id]=a.prompt; });
+
+function renderAgents(){
+  const groups={top:'grp-top',email:'grp-email',pub:'grp-pub'};
+  Object.values(groups).forEach(id=>document.getElementById(id).innerHTML='');
+  AGENTS.forEach(a=>{
+    const el=document.createElement('div'); el.className='agent';
+    el.innerHTML=`
+      <div class="agent-h" onclick="this.parentNode.classList.toggle('open')">
+        <div class="agent-name"><span class="dot" style="background:${a.color}"></span>${a.name}</div>
+        <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
+      <div class="agent-body"><textarea id="pr-${a.id}">${prompts[a.id]}</textarea></div>`;
+    document.getElementById(groups[a.grp]).appendChild(el);
+  });
+}
+function savePrompts(){
+  AGENTS.forEach(a=>{ const t=document.getElementById('pr-'+a.id); if(t) prompts[a.id]=t.value; });
+  store.set('neuru_prompts',prompts); toast('Промпты сохранены');
+}
+function resetPrompts(){
+  AGENTS.forEach(a=>prompts[a.id]=a.prompt); store.set('neuru_prompts',prompts);
+  renderAgents(); toast('Возвращены исходные промпты');
+}
+
+// ---------- провайдеры ----------
+const PROVIDERS=[
+  {id:'claude', name:'Claude', model:'claude-sonnet-4-6', cur:'usd',
+   hint:'Ключ с console.anthropic.com → API Keys. Оплата в валюте.'},
+  {id:'chatgpt', name:'ChatGPT', model:'gpt-4o', cur:'usd',
+   hint:'Ключ с platform.openai.com → API keys. Оплата в валюте.'},
+  {id:'gigachat', name:'GigaChat', model:'GigaChat-Pro', cur:'rub',
+   hint:'Авторизационные данные из личного кабинета Сбера (developers.sber.ru). Оплата рублями.'},
+  {id:'yandexgpt', name:'YandexGPT', model:'yandexgpt', cur:'rub',
+   hint:'Ключ и folder-id из Yandex Cloud. Оплата рублями.'}
+];
+let provider = store.get('neuru_provider', {id:'claude', key:'', model:'claude-sonnet-4-6'});
+function renderProviders(){
+  const g=document.getElementById('provGrid'); g.innerHTML='';
+  PROVIDERS.forEach(p=>{
+    const el=document.createElement('div');
+    el.className='prov'+(provider.id===p.id?' sel':'');
+    el.innerHTML=`<span class="badge ${p.cur==='rub'?'b-rub':'b-usd'}">${p.cur==='rub'?'₽ рубли':'$ валюта'}</span>
+      <div class="prov-n">${p.name}</div><div class="prov-m">${p.model}</div>`;
+    el.onclick=()=>{ provider.id=p.id; if(!provider.model||PROVIDERS.some(x=>x.model===provider.model)) provider.model=p.model;
+      document.getElementById('modelName').value=provider.model;
+      document.getElementById('keyHint').textContent=p.hint; renderProviders(); };
+    g.appendChild(el);
+  });
+  const cur=PROVIDERS.find(p=>p.id===provider.id)||PROVIDERS[0];
+  document.getElementById('keyHint').textContent=cur.hint;
+  document.getElementById('apiKey').value=provider.key||'';
+  document.getElementById('modelName').value=provider.model||cur.model;
+}
+function saveProvider(){
+  provider.key=document.getElementById('apiKey').value;
+  provider.model=document.getElementById('modelName').value;
+  store.set('neuru_provider',provider); toast('Провайдер сохранён');
+}
+
+// ---------- логотип / бренд ----------
+let brand = store.get('neuru_brand', {name:'НЭЙРУ', logo:''});
+function applyBrand(){
+  document.getElementById('brandName').textContent=brand.name||'НЭЙРУ';
+  const bl=document.getElementById('brandLogo'), lp=document.getElementById('logoPrev');
+  const letter=(brand.name||'Н').trim().charAt(0).toUpperCase();
+  if(brand.logo){ bl.innerHTML=`<img src="${brand.logo}">`; lp.className='logo-prev'; lp.innerHTML=`<img src="${brand.logo}">`; }
+  else { bl.textContent=letter; lp.className='logo-prev grad'; lp.textContent=letter; }
+  document.getElementById('companyName').value=brand.name||'';
+}
+function onLogo(e){
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader(); r.onload=()=>{ brand.logo=r.result; applyBrand(); }; r.readAsDataURL(f);
+}
+function clearLogo(){ brand.logo=''; applyBrand(); }
+function liveName(){ brand.name=document.getElementById('companyName').value; applyBrand(); }
+function saveBranding(){ store.set('neuru_brand',brand); toast('Оформление сохранено'); }
+
+// ---------- токены ----------
+// формат журнала (пишет движок): [{ts, agent, model, in, out}]
+let usage = store.get('neuru_usage', []);
+const PRICE={ // $ за 1 млн токенов (примерно; редактируется под провайдера)
+  'claude-sonnet-4-6':{in:3,out:15}, 'claude-haiku-4-5':{in:1,out:5},
+  'gpt-4o':{in:2.5,out:10}, 'GigaChat-Pro':{in:0,out:0}, 'yandexgpt':{in:0,out:0}
+};
+let period='day';
+function inPeriod(ts){
+  const now=Date.now(), d=now-new Date(ts).getTime();
+  if(period==='day') return d<=864e5;
+  if(period==='week') return d<=7*864e5;
+  if(period==='month') return d<=30*864e5;
+  return true;
+}
+function renderTokens(){
+  const rows=usage.filter(u=>inPeriod(u.ts));
+  let ti=0,to=0,cost=0; const byAgent={};
+  rows.forEach(u=>{ ti+=u.in||0; to+=u.out||0;
+    const pr=PRICE[u.model]||{in:0,out:0}; cost+=(u.in*pr.in+u.out*pr.out)/1e6;
+    byAgent[u.agent]=byAgent[u.agent]||{in:0,out:0,cost:0};
+    byAgent[u.agent].in+=u.in; byAgent[u.agent].out+=u.out;
+    byAgent[u.agent].cost+=(u.in*pr.in+u.out*pr.out)/1e6; });
+  document.getElementById('kIn').textContent=fmt(ti);
+  document.getElementById('kOut').textContent=fmt(to);
+  document.getElementById('kCost').textContent='$'+cost.toFixed(2);
+  const tbl=document.getElementById('tokTable'), emp=document.getElementById('tokEmpty');
+  const names=Object.keys(byAgent);
+  if(!names.length){ tbl.innerHTML=''; emp.style.display='block'; return; }
+  emp.style.display='none';
+  let h='<table><tr><th>Агент</th><th class="num">Вход</th><th class="num">Выход</th><th class="num">Оценка $</th></tr>';
+  names.forEach(n=>{ const a=byAgent[n]; h+=`<tr><td>${n}</td><td class="num">${fmt(a.in)}</td><td class="num">${fmt(a.out)}</td><td class="num">${a.cost.toFixed(2)}</td></tr>`; });
+  h+='</table>'; tbl.innerHTML=h;
+}
+function fmt(n){ return n>=1e6?(n/1e6).toFixed(2)+'M':n>=1e3?(n/1e3).toFixed(1)+'K':String(n); }
+
+// ---------- навигация / общее ----------
+document.querySelectorAll('.nav').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.nav').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(x=>x.classList.remove('on'));
+  b.classList.add('active'); document.getElementById('p-'+b.dataset.p).classList.add('on');
+});
+document.querySelectorAll('#periodSeg button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#periodSeg button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); period=b.dataset.r; renderTokens();
+});
+let tt; function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show');
+  clearTimeout(tt); tt=setTimeout(()=>t.classList.remove('show'),1800); }
+
+renderAgents(); renderProviders(); applyBrand(); renderTokens();
+</script>
+</body>
+</html>
