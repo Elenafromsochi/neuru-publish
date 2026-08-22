@@ -287,7 +287,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 ::-webkit-scrollbar-thumb{background:rgba(37,99,235,.18);border-radius:3px}
 
 <style id="admin-css">
-#sec-admin{padding-left:40px}
+#sec-admin{padding-left:0}
 .run-btn{background:var(--grad);color:#fff;border:none;border-radius:9px;padding:9px 18px;font:600 13px Inter,sans-serif;cursor:pointer;margin:2px 0 16px}
 .run-btn:hover{filter:brightness(1.07)} .run-btn:disabled{opacity:.6;cursor:default}
 #sec-admin .adm-ghbox{border:1px solid var(--border);border-radius:11px;padding:14px;margin-bottom:16px;background:var(--card)}
@@ -1033,7 +1033,7 @@ function renderAnMd(text){
 </section>
 
 </div><!-- /content -->
-
+<div class="content">
 <section class="section" id="sec-admin">
   <div class="sec-head"><h1 class="sec-title">Админ-панель</h1>
   <p class="sec-desc">Настройки платформы: промпты агентов, провайдер ИИ, логотип, расход токенов.</p></div>
@@ -1692,7 +1692,7 @@ Telegram, ВКонтакте, 24/7. Ловит обращения, которы�
 деликатный оффер, CTA и хэштеги; предложи время публикации. Пометь «Готово».
 Сама выкладка в ТГ/Дзен/ВК делается интеграцией-скриптом, не моделью — ты только
 готовишь и одобряешь. По-русски.
-</script></main>
+</script></div></main>
 
 <!-- MODAL -->
 <div class="modal-ov" id="modal-ov" onclick="if(event.target===this)closeModal()">
