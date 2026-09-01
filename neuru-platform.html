@@ -75,7 +75,15 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* ─── NEWS ─── */
-.news-layout{display:grid;grid-template-columns:1fr 2fr;gap:24px}
+.news-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:24px}
+/* FIX: длинные ссылки не растягивают колонку новостей */
+#news-panel{min-width:0;max-width:100%}
+.news-card{min-width:0;max-width:100%}
+.nc-title,.hl-title,.nc-body,.nc-rec,.nc-rec-txt,.md-block,.md-block-txt,.news-card p,.news-card li,.news-card td{min-width:0;overflow-wrap:anywhere;word-break:break-word}
+.news-card pre,.news-card code{white-space:pre-wrap;overflow-wrap:anywhere}
+.nc-body a,.nc-rec-txt a,.nc-src{overflow-wrap:anywhere;min-width:0}
+.nc-meta{flex-wrap:wrap;gap:8px;min-width:0}
+.news-card table{display:block;max-width:100%;overflow-x:auto}
 .cal-tabs{display:flex;gap:6px;margin-bottom:12px}
 .cal-tab{padding:5px 14px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--muted);transition:all .15s;font-family:inherit}
 .cal-tab.active{background:var(--grad);color:#fff;border-color:transparent}
@@ -901,7 +909,8 @@ function renderAnMd(text){
 <!-- ══ ПУБЛИКАЦИИ: СТРАТЕГ ══ -->
 <section class="section" id="sec-pub-strategy">
   <div class="sec-title">ИИ-<span>Стратег</span></div>
-  <div class="sec-desc">На основе выбранной новости строит стратегию на 10 статей и передаёт её в ИИ-Копирайтер.</div>
+  <div class="sec-desc">Стратегия публикаций на неделю для 7 каналов. Запуск: каждый понедельник в 9:00.</div>
+  <button class="run-btn" onclick="runAgent('agents-pub-strateg.yml',this)">▶ Запуск сейчас</button>
   <div class="card">
     <div class="card-hdr"><div class="card-title">🎯 Стратегия публикаций</div><button onclick="buildPubStrategy()" style="background:var(--grad);color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">▶ Построить стратегию</button></div>
     <div id="pub-strategy-result" style="font-size:13px;color:var(--muted);padding:20px;text-align:center">Выберите новость в ИИ-Новостнике, затем нажмите «Построить стратегию»</div>
@@ -1830,7 +1839,7 @@ Telegram, ВКонтакте, 24/7. Клиенты: независимые от�
 <script type="text/plain" id="admdp-pub-strateg"># МАСТЕР-ПРОМПТ ИИ-СТРАТЕГ-ПУБЛИЦИСТ НЭЙРУ v2.5
 
 ## РОЛЬ
-Ты — ИИ-Стратег-Публицист НЭЙРУ. Получив данные из рабочих папок, ты разрабатываешь стратегию публикационной кампании: 10 материалов для 6 площадок, которые ИИ-Копирайтер-Публицист затем превратит в готовые тексты.
+Ты — ИИ-Стратег-Публицист НЭЙРУ. Получив данные из рабочих папок, ты разрабатываешь стратегию публикационной кампании для 7 каналов, которые ИИ-Копирайтер-Публицист затем превратит в готовые тексты.
 
 Ты работаешь без подтверждения человека. Ничего не выдумывай. Не хватает данных — пиши в ВОПРОСЫ.
 
@@ -1947,6 +1956,13 @@ Telegram, ВКонтакте, 24/7. Клиенты: независимые от�
 - **Тон:** профессиональный, конкретный — Вероника как спикер и эксперт отрасли
 - **Особенность:** аудитория заточена на деловые контакты — каждый абзац несёт деловую ценность
 
+### 7. САЙТ ТИЛЬДА (neuru.ru / блог)
+- **Аудитория:** те, кто уже нашёл сайт НЭЙРУ — тёплый трафик, потенциальные клиенты, изучающие продукт
+- **Формат:** SEO-статья для блога сайта, 1200–2500 слов, с подзаголовками, списками, чёткой структурой под поиск
+- **Что работает:** практические гайды, разборы, ответы на реальные вопросы отельеров, кейсы с конкретикой — то, что ищут в Яндексе/Google
+- **Тон:** экспертный, но доступный — Вероника отвечает на вопрос, который отельер вбивает в поиск
+- **Особенность:** долгий SEO-эффект; в каждой статье естественная ссылка на демо ai-porter; заголовок и первый абзац — под поисковый запрос
+
 ---
 
 ## ЗАДАЧА
@@ -1956,7 +1972,7 @@ Telegram, ВКонтакте, 24/7. Клиенты: независимые от�
 - Сколько новостей в папке недели на GitHub и какие (одна строка на каждую)
 - Ключевая цитата или боль из интервью (одна строка, или «нет данных»)
 - Темы предыдущих кампаний (или «первая кампания»)
-- Как будут распределены 10 публикаций между новостями и площадками
+- Как будут распределены публикации между новостями и 7 каналами
 
 Если папка недели в neuru-publish/social-news/ пуста — напиши в ВОПРОСЫ и остановись.
 
@@ -2438,6 +2454,30 @@ function renderNewsList(day,mon,ds,parsed){
   panel.innerHTML=hdr+rows+'<div id="news-inline"></div>'+(spParts.length?'<div class="sp-blocks">'+spParts.join('')+'</div>':'');
 }
 
+// Превращает голые URL в тексте в компактные кликабельные ссылки,
+// чтобы длинный адрес не растягивал вёрстку.
+function linkifyInto(el, text){
+  el.textContent = '';
+  if(!text) return;
+  var re = /https?:\/\/[^\s<>"')\]]+/g, last = 0, m;
+  while((m = re.exec(text)) !== null){
+    if(m.index > last) el.appendChild(document.createTextNode(text.slice(last, m.index)));
+    var url = m[0];
+    var a = document.createElement('a');
+    a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.title = url;
+    a.style.cssText = 'color:var(--blue);text-decoration:underline;overflow-wrap:anywhere';
+    if(url.length > 60){
+      var host = url.replace(/^https?:\/\//, '').split('/')[0];
+      a.textContent = host + '/…';
+    } else {
+      a.textContent = url;
+    }
+    el.appendChild(a);
+    last = m.index + url.length;
+  }
+  if(last < text.length) el.appendChild(document.createTextNode(text.slice(last)));
+}
+
 function openNews(idx){
   window._openNewsIdx=idx;
   var n=curNewsItems[idx]; if(!n) return;
@@ -2451,7 +2491,7 @@ function openNews(idx){
   if(n.neyruRec){
     var rd=document.createElement('div'); rd.className='nc-rec';
     rd.innerHTML='<div class="nc-rec-lbl">🎯 Рекомендация для НЭЙРУ</div>';
-    var rt=document.createElement('div'); rt.className='nc-rec-txt'; rt.textContent=n.neyruRec;
+    var rt=document.createElement('div'); rt.className='nc-rec-txt'; linkifyInto(rt, n.neyruRec);
     rd.appendChild(rt); card.appendChild(rd);
   }
   var md=document.createElement('div'); md.className='nc-meta';
@@ -4950,7 +4990,7 @@ function openNews(idx){
   if(n.neyruRec){
     var rd=document.createElement('div'); rd.className='nc-rec';
     rd.innerHTML='<div class="nc-rec-lbl">🎯 Рекомендация для НЭЙРУ</div>';
-    var rt=document.createElement('div'); rt.className='nc-rec-txt'; rt.textContent=n.neyruRec;
+    var rt=document.createElement('div'); rt.className='nc-rec-txt'; linkifyInto(rt, n.neyruRec);
     rd.appendChild(rt); card.appendChild(rd);
   }
   var md=document.createElement('div'); md.className='nc-meta';
