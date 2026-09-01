@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-08-13-1900 -->
+<!DOCTYPE html><!-- v2026-09-01-fix4 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -55,7 +55,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .sb-err{font-size:10px;color:#EF4444;margin-top:4px}
 
 /* MAIN */
-.main{margin-left:var(--sw);flex:1;position:relative;z-index:1;min-height:100vh;min-width:0}
+.main{margin-left:var(--sw);flex:1;position:relative;z-index:1;min-height:100vh;min-width:0;max-width:100%}
 .content{padding:32px;min-width:0;overflow-x:hidden;box-sizing:border-box}
 #sec-analytics,#an-analysis-panel,#an-analysis-content,#an-analysis-inline,#an-analysis-inline-content{min-width:0;max-width:100%;box-sizing:border-box}
 .section{display:none}.section.active{display:block;min-width:0;overflow-x:hidden}
@@ -79,7 +79,8 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 /* FIX: длинные ссылки не растягивают колонку новостей */
 #news-panel{min-width:0;max-width:100%}
 .news-card{min-width:0;max-width:100%}
-.nc-title,.hl-title,.nc-body,.nc-rec,.nc-rec-txt,.md-block,.md-block-txt,.news-card p,.news-card li,.news-card td{min-width:0;overflow-wrap:anywhere;word-break:break-word}
+.news-card,.news-card *{overflow-wrap:anywhere;word-break:break-word}
+.nc-title,.hl-title,.nc-body,.nc-rec,.nc-rec-txt,.md-block,.md-block-body,.news-card p,.news-card li,.news-card td{min-width:0}
 .news-card pre,.news-card code{white-space:pre-wrap;overflow-wrap:anywhere}
 .nc-body a,.nc-rec-txt a,.nc-src{overflow-wrap:anywhere;min-width:0}
 .nc-meta{flex-wrap:wrap;gap:8px;min-width:0}
@@ -443,7 +444,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 01.09 · fix4</div>
   </div>
 </aside>
 
@@ -2009,7 +2010,8 @@ function mdToHtml(text){
     { rx: /ПОЧЕМУ ЭТО ВАЖНО:/gi,          cls: 'b-pain',  lbl: '\u0411\u043e\u043b\u044c \u043e\u0442\u0435\u043b\u044c\u0435\u0440\u0430' },
     { rx: /КОНКРЕТИКА:/gi,                cls: 'b-fact',  lbl: '\u041a\u043e\u043d\u043a\u0440\u0435\u0442\u0438\u043a\u0430' }
   ];
-  text = text.replace(/Ссылка\s*:\s*https?:\/\/[^\s)]+/gi, '');
+  // терпимо к markdown-разметке вокруг метки: **ССЫЛКА:**, **ССЫЛКА**:, ССЫЛКА —
+  text = text.replace(/[*_]{0,2}\s*(?:ссылка|источник)\s*[*_]{0,2}\s*[:\-\u2013\u2014]?\s*[*_]{0,2}\s*https?:\/\/[^\s)]+/gi, '');
 
   function applyBold(t){ return t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>'); }
 
@@ -3769,6 +3771,29 @@ function renderNewsList(day,mon,ds,parsed){
   panel.innerHTML=hdr+rows+'<div id="news-inline"></div>'+(spParts.length?'<div class="sp-blocks">'+spParts.join('')+'</div>':'');
 }
 
+// Проходит по всем текстовым узлам готовой карточки и превращает голые URL
+// в компактные ссылки. Работает и для блоков из markdown, и для nc-rec.
+function linkifyCard(root){
+  if(!root || !window.document || !document.createTreeWalker) return;
+  var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
+  var nodes = [], n;
+  while((n = walker.nextNode())) nodes.push(n);
+  nodes.forEach(function(t){
+    var v = t.nodeValue;
+    if(!v || v.indexOf('http') === -1) return;
+    var p = t.parentNode;
+    if(!p) return;
+    // уже внутри ссылки — не трогаем
+    var up = p;
+    while(up && up !== root){ if(up.tagName === 'A') return; up = up.parentNode; }
+    var tmp = document.createElement('span');
+    linkifyInto(tmp, v);
+    var frag = document.createDocumentFragment();
+    while(tmp.firstChild) frag.appendChild(tmp.firstChild);
+    p.replaceChild(frag, t);
+  });
+}
+
 function openNews(idx){
   window._openNewsIdx=idx;
   var n=curNewsItems[idx]; if(!n) return;
@@ -3791,6 +3816,7 @@ function openNews(idx){
     +'<span class="nc-ts">'+n.time+' · '+curNewsDate+'</span>';
   card.appendChild(md);
   if(row&&row.parentNode){ row.insertAdjacentElement('afterend',card); }
+  linkifyCard(card);
   // attach listener AFTER card is in DOM
   var cpBtn=document.getElementById('news-copy-btn');
   if(cpBtn){
