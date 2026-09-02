@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-02-fix7 -->
+<!DOCTYPE html><!-- v2026-09-02-fix8 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -444,7 +444,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 02.09 · fix7</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 02.09 · fix8</div>
   </div>
 </aside>
 
@@ -2295,7 +2295,11 @@ function extractSubj(text){
     if(q) return q[1].trim();
     return sel.replace(/\s+—\s.*$/,'').replace(/^\*+|\*+$/g,'').trim().substring(0,90);
   }
-  // 2) явная «Тема:» отдельной строкой
+  // 2) новый формат: «Тема A: …» — первый вариант считаем основным
+  var mA = text.match(/^\*{0,2}\s*Тема\s*[AА]\s*:\*{0,2}\s*(.+)$/mi)
+        || text.match(/^\*{0,2}\s*Тема\s*[A-ZА-Я0-9]{1,2}\s*:\*{0,2}\s*(.+)$/mi);
+  if(mA) return mA[1].replace(/^\*+|\*+$/g,'').trim();
+  // 3) явная «Тема:» отдельной строкой
   var m = text.match(/^\*{0,2}\s*(?:тема|subject)\s*:\*{0,2}\s*([^\n]+)/mi);
   if(m) return m[1].replace(/^\*+|\*+$/g,'').trim();
   var lines = text.split('\n');
@@ -2466,6 +2470,7 @@ function renderCopyModal(text){
   function flush(){ if(curKey !== null) sections[curKey] = curLines.join('\n').trim(); curLines=[]; }
 
   var foundFirstH2 = false;
+  var themeLines = [];   // формат «Тема A: …» — три варианта темы отдельными строками
   lines.forEach(function(l){
     // Пропускаем первый ## заголовок (имя письма — уже в modal-title)
     if(!foundFirstH2 && l.match(/^##?\s/)){ foundFirstH2=true; return; }
@@ -2496,9 +2501,20 @@ function renderCopyModal(text){
     // ### Прехедер — отдельная строка
     if(lc.match(/^прехедер$/)){ flush(); curKey='preheader'; return; }
 
+    // «Тема A: …», «Тема B: …» — варианты темы письма
+    var mTh = l.match(/^\*{0,2}\s*Тема\s*([A-ZА-Я0-9]{1,2})\s*:\*{0,2}\s*(.+)$/i);
+    if(mTh && !sections.body && curKey!=='body' && curKey!=='breakdown'){
+      themeLines.push('Тема '+mTh[1].toUpperCase()+': '+mTh[2].replace(/\*+/g,'').trim());
+      return;
+    }
+
     if(curKey !== null) curLines.push(l);
   });
   flush();
+
+  // новый формат копирайтера: тем нет отдельным разделом, они идут строками
+  var headsLabel = 'Генератор заголовков';
+  if(themeLines.length && !sections.heads){ sections.heads = themeLines.join('\n'); headsLabel = 'Варианты тем'; }
 
   var hasStruct = sections.heads||sections.body||sections.preheader||sections.breakdown;
   if(!hasStruct){
@@ -2553,7 +2569,7 @@ function renderCopyModal(text){
     if(variants.length || chosen){
       window._sectTexts['heads'] = chosen || variants[0] || '';
       html += '<div style="margin-bottom:16px" id="sect-heads">'
-            + sectionHdr('Генератор заголовков', null)
+            + sectionHdr(headsLabel, null)
             + '<div style="background:var(--bg);border-radius:10px;padding:14px 16px">'
             + variants.map(function(v,i){
                 return '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:6px 0;'
