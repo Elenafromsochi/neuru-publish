@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-01-fix4 -->
+<!DOCTYPE html><!-- v2026-09-02-fix7 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -444,7 +444,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 01.09 · fix4</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 02.09 · fix7</div>
   </div>
 </aside>
 
@@ -455,6 +455,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
 <section class="section active" id="sec-news">
   <div class="sec-title">ИИ-<span>Новостник</span></div>
   <div class="sec-desc">Ежедневный мониторинг новостей ИИ в гостиничной индустрии. Запускается каждый день в 8:00.</div>
+  <button class="run-btn" onclick="runAgent('agents-news.yml',this)">▶ Запуск сейчас</button>
 
   <div class="news-layout">
     <div class="card" style="padding:18px">
@@ -522,7 +523,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
 <!-- ══ КОПИРАЙТЕР ══ -->
 <section class="section" id="sec-copy">
   <div class="sec-title">ИИ-<span>Копирайтер</span></div>
-  <div class="sec-desc">6 писем на неделю: вторник и четверг × 3 сегмента (Москва, СПб, регионы). Запуск: каждый понедельник в 10:00.</div>
+  <div class="sec-desc">8 писем на неделю: вторник и четверг × 4 сегмента (Москва, СПб, регионы, глемпинги). Запуск: каждый понедельник в 10:00.</div>
   <button class="run-btn" onclick="runAgent('agents-copywriter.yml',this)">▶ Запуск сейчас</button>
 
   <!-- Слайдер недели -->
@@ -848,10 +849,12 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
   </div>
 
   <div class="adm-pane on" id="adm-prompts">
+    <div id="adm-git-state" style="font-size:12px;padding:9px 12px;border-radius:8px;background:var(--bg);margin-bottom:12px;line-height:1.5">Промпты не загружены.</div>
+    <div class="adm-row end" style="margin-bottom:12px"><button class="adm-btn ghost" onclick="admLoadFromGit(true)">Перечитать из GitHub</button></div>
     <div id="adm-agents"></div>
     <div class="adm-row end"><button class="adm-btn ghost" onclick="admResetPrompts()">Вернуть исходные</button>
       <button class="adm-btn" onclick="admSavePrompts()">Сохранить промпты</button></div>
-    <div class="adm-note">«Сохранить промпты» пишет и в браузер, и в GitHub (engine/prompts/), откуда их читают агенты. Нужен подключённый GitHub-токен (вкладка «Провайдер ИИ»). Коммитятся только изменённые промпты.</div>
+    <div class="adm-note">Промпты живут в GitHub — <code>engine/prompts/</code>, оттуда их читают агенты. При открытии панели они подтягиваются из репозитория, «Сохранить» пишет их обратно. Нужен подключённый GitHub-токен (вкладка «Провайдер ИИ»). Коммитятся только изменённые промпты.</div>
   </div>
 
   <div class="adm-pane" id="adm-provider">
@@ -2284,11 +2287,32 @@ function parseCopyMd(md){
 }
 
 function extractSubj(text){
-  var m = text.match(/(?:тема|subject)[:\s]+([^\n]+)/i);
-  if(m) return m[1].trim();
+  // 1) строка «**Выбран:** «...»» — это и есть тема письма
+  var mSel = text.match(/^\*{0,2}\s*Выбран\s*:?\*{0,2}\s*(.+)$/mi);
+  if(mSel){
+    var sel = mSel[1].trim();
+    var q = sel.match(/«([^«]*)»/) || sel.match(/"([^"]*)"/);
+    if(q) return q[1].trim();
+    return sel.replace(/\s+—\s.*$/,'').replace(/^\*+|\*+$/g,'').trim().substring(0,90);
+  }
+  // 2) явная «Тема:» отдельной строкой
+  var m = text.match(/^\*{0,2}\s*(?:тема|subject)\s*:\*{0,2}\s*([^\n]+)/mi);
+  if(m) return m[1].replace(/^\*+|\*+$/g,'').trim();
   var lines = text.split('\n');
-  for(var i=0;i<lines.length;i++){ var l=lines[i].trim(); if(l&&!l.match(/^[#*_]/)) return l.substring(0,90); }
+  for(var i=0;i<lines.length;i++){ var l=lines[i].trim(); if(l&&!l.match(/^[#*_>-]/)) return l.substring(0,90); }
   return 'Письмо';
+}
+
+// Короткий анонс для карточки: прехедер, иначе первый абзац тела
+function extractPreview(text){
+  var mPre = text.match(/^\*{0,2}\s*Прехедер\s*:\*{0,2}\s*(.+)$/mi);
+  if(mPre && mPre[1].trim()) return mPre[1].trim();
+  var lines = text.split('\n');
+  for(var i=0;i<lines.length;i++){
+    var l = lines[i].trim();
+    if(l && !l.match(/^[#>*-]/) && !l.match(/^Приём\s*\d/i)) return l.substring(0,160)+'…';
+  }
+  return '';
 }
 
 function renderCopyCards(dayData, day, fn, ghUrl){
@@ -2298,7 +2322,7 @@ function renderCopyCards(dayData, day, fn, ghUrl){
   grid.innerHTML = segs.map(function(s){
     var text = dayData[s.k]||'';
     var subj = text ? extractSubj(text) : 'Раздел не найден';
-    var prev = text ? text.replace(/^#{1,3}[^\n]+\n/gm,'').substring(0,140)+'…' : 'Проверьте структуру файла copy/'+fn;
+    var prev = text ? extractPreview(text) : 'Проверьте структуру файла copy/'+fn;
     return '<div class="email-card">'
       +'<div class="email-hdr"><div><div class="email-seg">Сегмент '+s.n+'</div><div class="email-city">'+s.city+'</div></div><div class="city-ico '+s.cls+'">'+s.ico+'</div></div>'
       +'<div class="email-body"><div class="email-subj">'+subj+'</div><div class="email-prev">'+prev+'</div></div>'
@@ -2351,7 +2375,9 @@ function mdToRichHtml(text){
     // Определяем тип строки
     // Подпись: Вероника Войнова
     if(t.match(/Вероника\s+Войнова/i)){
-      out += '<div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);font-size:12px;color:var(--muted);line-height:1.6">' + inlineFormat(t) + '</div>';
+      out += '<div style="' + (justHr ? 'margin-top:4px;' : 'margin-top:20px;padding-top:16px;border-top:1px solid var(--border);')
+           + 'font-size:12px;color:var(--muted);line-height:1.6">' + inlineFormat(t) + '</div>';
+      justHr = false;
       return;
     }
     // Отписаться
@@ -2359,24 +2385,40 @@ function mdToRichHtml(text){
       out += '<div style="margin-top:8px;padding:6px 10px;background:var(--soft);border-radius:6px;font-size:11px;color:var(--muted)">' + inlineFormat(t) + '</div>';
       return;
     }
-    // Контактная строка после подписи (телефон, email, сайт)
-    if(t.match(/\+7[\s\d]{10,}|sales@|https?:\/\/neuru/)){
+    // Контактная строка после подписи (телефон, email, сайт).
+    // Только если кроме самих контактов в строке почти ничего нет —
+    // иначе под это правило попадали абзацы с призывом и ссылкой на демо.
+    var stripped = t.replace(/https?:\/\/\S+/g,'')
+                    .replace(/[\w.+-]+@[\w.-]+/g,'')
+                    .replace(/\+7[\s\d\-()]{9,}/g,'').trim();
+    if(stripped.length < 15 && t.match(/\+7[\s\d]{9,}|@|https?:\/\//)){
+      justHr = false;
       out += '<div style="font-size:12px;color:var(--muted);line-height:1.6">' + inlineFormat(t) + '</div>';
       return;
     }
     // Жирный заголовок типа **Что делать:**, **Важно сейчас:**
     if(t.match(/^\*\*[^*]+:\*\*/) || t.match(/^[📌🔴⚡🎯‼️]/u)){
+      justHr = false;
       out += '<div style="margin:14px 0 6px;font-size:13px;line-height:1.7;font-weight:600;color:var(--text)">' + inlineFormat(t) + '</div>';
       return;
     }
     // Обычный параграф
+    justHr = false;
     out += '<div style="margin:0 0 10px;font-size:13px;line-height:1.85;color:var(--text)">' + inlineFormat(t) + '</div>';
   }
 
   // Определяем начало блока подписи
   var sigStarted = false;
+  var justHr = false;
 
   lines.forEach(function(l){
+    // Горизонтальная черта ---
+    if(/^\s*-{3,}\s*$/.test(l)){
+      flushPara(); if(inBlockquote) flushBq();
+      out += '<div style="height:1px;background:var(--border);margin:18px 0"></div>';
+      justHr = true;
+      return;
+    }
     // Blockquote >
     if(l.match(/^>\s?/)){
       flushPara();
@@ -2437,7 +2479,19 @@ function renderCopyModal(text){
 
     // **Прехедер:** текст — inline (текст на той же строке)
     var mPre = l.match(/^\*{0,2}\s*Прехедер\s*:\*{0,2}\s*(.*)/i);
-    if(mPre){ flush(); curKey='preheader'; curLines.push(mPre[1].trim()); return; }
+    if(mPre){
+      flush();
+      var preTxt = mPre[1].trim();
+      if(preTxt){
+        // прехедер занимает ровно одну строку — всё, что идёт после неё,
+        // это уже текст письма (отдельного заголовка в файле нет)
+        sections.preheader = preTxt;
+        curKey = 'body';
+      } else {
+        curKey = 'preheader';
+      }
+      return;
+    }
 
     // ### Прехедер — отдельная строка
     if(lc.match(/^прехедер$/)){ flush(); curKey='preheader'; return; }
@@ -2485,7 +2539,12 @@ function renderCopyModal(text){
       if(!t || t.replace(/\s/g,'').match(/^\.+$/) || t.match(/^-{3,}/) || t.match(/^\|[-\s|]+\|$/)) return;
       var tc = t.toLowerCase().replace(/^\*+/,'');
       if(tc.match(/^выбран/)){
-        chosen = t.replace(/^\*+выбран\*+:?\s*/i,'').replace(/^выбран:?\s*/i,'').replace(/^\*+|\*+$/g,'').trim();
+        // в файле встречается и «**Выбран:**», и «**Выбран**:», и «Выбран:»
+        chosen = t.replace(/^\*+/,'')
+                  .replace(/^\s*выбран\s*:?\s*/i,'')
+                  .replace(/^\*+\s*/,'')
+                  .replace(/^:\s*/,'')
+                  .replace(/\*+$/,'').trim();
       } else {
         var clean = t.replace(/^\*+|\*+$/g,'').trim();
         if(clean) variants.push(clean);
@@ -2543,6 +2602,7 @@ function renderCopyModal(text){
   // ── Текст письма ──
   if(sections.body){
     var bodyRaw = sections.body.replace(/^\*+\s*текст письма\s*\*+:?\s*\n?/i,'').trim();
+    bodyRaw = bodyRaw.replace(/^\s*-{3,}\s*\n?/,'').replace(/\n\s*-{3,}\s*$/,'').trim();
     window._sectTexts['body'] = bodyRaw;
     html += '<div style="margin:0 -24px 16px;padding:16px 24px;border-top:1px solid var(--border);border-bottom:1px solid var(--border)" id="sect-body">'
           + sectionHdr('Текст письма', 'body')
@@ -2558,6 +2618,7 @@ function renderCopyModal(text){
     blines.forEach(function(l){
       var t = l.trim();
       if(!t) return;
+      if(/^-{3,}$/.test(t)) return;      // горизонтальная черта, не пункт
       t = t.replace(/^[-*•]\s*/,'');
       var mKey = t.match(/^\*{1,2}([^*:]+):\*{1,2}\s*(.*)/);
       if(mKey){
@@ -2619,7 +2680,7 @@ function openCopyModal(seg, day){
   var dayData = copyCache[cacheKey]||{};
   var text = dayData[seg]||'';
   if(!text) return;
-  var cities={msk:'Москва',spb:'Санкт-Петербург',reg:'Регионы'};
+  var cities={msk:'Москва',spb:'Санкт-Петербург',reg:'Регионы',glamp:'Глемпинги РФ'};
   var days={tue:'Вторник',thu:'Четверг'};
   var titles = copyCache[fn+'_titles']||{};
   var letterTitle = titles[day+'_'+seg] || (days[day]+' · '+cities[seg]);
@@ -4701,6 +4762,48 @@ function renderAnMd(text){
     });
   };
   function admB64(str){ return btoa(unescape(encodeURIComponent(str))); }
+  function admUnB64(b64){ return decodeURIComponent(escape(atob((b64||"").replace(/\s/g,"")))); }
+
+  // Какие промпты реально прочитаны из репозитория. Пока файл не прочитан,
+  // сохранять его обратно нельзя — иначе версия, вшитая в HTML, затрёт свежую в GitHub.
+  var loadedFromGit = {};
+
+  function admGitState(html){ var el=document.getElementById("adm-git-state"); if(el) el.innerHTML=html; }
+
+  window.admLoadFromGit = async function(manual){
+    var repo=(typeof REPO!=="undefined"&&REPO)?REPO:"Elenafromsochi/neuru-email";
+    var t=(window.getToken?getToken():localStorage.getItem("gh_token"))||"";
+    if(!t){
+      admGitState("<b style=\"color:#D97706\">GitHub-токен не подключён.</b> Показаны версии, вшитые в дашборд — "
+        + "они могут не совпадать с теми, по которым работают агенты. Сохранение в репозиторий отключено. "
+        + "Подключите токен во вкладке «Провайдер ИИ».");
+      return;
+    }
+    admGitState("Читаю промпты из GitHub…");
+    var hdr={"Authorization":"Bearer "+t,"Accept":"application/vnd.github+json"};
+    var ok=0, missing=[], errs=[];
+    for(var i=0;i<AG.length;i++){
+      var id=AG[i][0];
+      try{
+        var r=await fetch("https://api.github.com/repos/"+repo+"/contents/engine/prompts/"+id+".txt?ref=main",{headers:hdr});
+        if(r.status===404){ missing.push(AG[i][1]); continue; }
+        if(!r.ok){ errs.push(AG[i][1]+": "+r.status); continue; }
+        var d=await r.json();
+        var txt=admUnB64(d.content);
+        if(!txt || txt.trim().length<20){ errs.push(AG[i][1]+": файл пустой"); continue; }
+        prompts[id]=txt.trim(); baseline[id]=prompts[id]; loadedFromGit[id]=true; ok++;
+      }catch(e){ errs.push(AG[i][1]+": "+e.message); }
+    }
+    SS("neuru_prompts",prompts);
+    admRenderAgents();
+    var msg="<b style=\"color:#10B981\">Загружено из GitHub: "+ok+" из "+AG.length+".</b> Правки уйдут в engine/prompts/.";
+    if(missing.length) msg+="<br>Нет файла в репозитории: "+missing.join(", ")+" — показана версия из дашборда, при сохранении файл будет создан.";
+    if(errs.length) msg+="<br><span style=\"color:#DC2626\">Ошибки: "+errs.join("; ")+"</span>";
+    admGitState(msg);
+    missing.forEach(function(nm){ AG.forEach(function(a){ if(a[1]===nm) loadedFromGit[a[0]]=true; }); });
+    if(manual) admToast("Промпты перечитаны");
+  };
+
   async function admSaveToGit(id, content){
     var repo=(typeof REPO!=="undefined"&&REPO)?REPO:"Elenafromsochi/neuru-email";
     var t=(window.getToken?getToken():localStorage.getItem("gh_token"))||"";
@@ -4722,6 +4825,14 @@ function renderAnMd(text){
     if(!t){ admToast("Сохранено в браузер. GitHub-токен не подключён — в prompts/ не записано."); return; }
     var changed=AG.filter(function(a){return prompts[a[0]]!==baseline[a[0]];});
     if(!changed.length){ admToast("Сохранено в браузер (в GitHub без изменений)."); return; }
+    var blocked=changed.filter(function(a){return !loadedFromGit[a[0]];});
+    if(blocked.length){
+      alert("Не сохраняю в GitHub: "+blocked.map(function(a){return a[1];}).join(", ")
+        +".\n\nЭти промпты не были прочитаны из репозитория, и в панели сейчас версия, вшитая в дашборд. "
+        +"Записав её, вы затрёте в GitHub то, по чему работают агенты.\n\nНажмите «Перечитать из GitHub» и повторите.");
+      changed=changed.filter(function(a){return loadedFromGit[a[0]];});
+      if(!changed.length) return;
+    }
     admToast("Сохраняю в GitHub: "+changed.length+" файл(ов)…");
     var ok=0, errs=[];
     for(var i=0;i<changed.length;i++){
@@ -4779,17 +4890,65 @@ function renderAnMd(text){
     var a=document.getElementById("adm-kin");if(!a)return;a.textContent=fmt(ti);document.getElementById("adm-kout").textContent=fmt(to);document.getElementById("adm-kcost").textContent="$"+c.toFixed(2);
   };
 
+  // Запуск агента из веба: дёргаем workflow_dispatch, затем следим за прогоном
+  // и показываем итог — раньше кнопка говорила «обновите страницу» и не знала,
+  // упал агент или отработал.
   window.runAgent=function(wf,btn){
+    var repo=(typeof REPO!=="undefined"&&REPO)?REPO:"Elenafromsochi/neuru-email";
     var t=(window.getToken?getToken():localStorage.getItem("gh_token"))||"";
     if(!t){alert("Сначала подключите GitHub-токен в Админ-панели → вкладка «Провайдер ИИ».");return;}
-    var old=btn.textContent;btn.textContent="Запуск…";btn.disabled=true;
-    fetch("https://api.github.com/repos/Elenafromsochi/neuru-email/actions/workflows/"+wf+"/dispatches",{
-      method:"POST",headers:{"Authorization":"Bearer "+t,"Accept":"application/vnd.github+json","Content-Type":"application/json"},
+    var hdr={"Authorization":"Bearer "+t,"Accept":"application/vnd.github+json"};
+    var old=btn.textContent, since=new Date(Date.now()-60000).toISOString();
+    function done(txt,keep){ btn.textContent=txt; if(!keep){ setTimeout(function(){btn.textContent=old;btn.disabled=false;},6000);} }
+    btn.textContent="Запускаю…"; btn.disabled=true;
+
+    fetch("https://api.github.com/repos/"+repo+"/actions/workflows/"+wf+"/dispatches",{
+      method:"POST",headers:Object.assign({},hdr,{"Content-Type":"application/json"}),
       body:JSON.stringify({ref:"main"})
     }).then(function(r){
-      if(r.status===204){btn.textContent="Запущено ✓";alert("Запущено! Результат появится в репозитории через 1–2 минуты — обновите страницу.");setTimeout(function(){btn.textContent=old;btn.disabled=false;},5000);}
-      else{r.text().then(function(x){btn.textContent=old;btn.disabled=false;alert("Не удалось запустить ("+r.status+"). Проверьте, что workflow "+wf+" загружен в .github/workflows и токен имеет доступ.\n"+x.slice(0,200));});}
-    }).catch(function(e){btn.textContent=old;btn.disabled=false;alert("Ошибка сети: "+e);});
+      if(r.status!==204){
+        return r.text().then(function(x){
+          btn.textContent=old; btn.disabled=false;
+          alert("Не удалось запустить ("+r.status+").\nПроверьте, что workflow "+wf+" лежит в .github/workflows и у токена есть доступ Actions: Read and write.\n"+x.slice(0,200));
+        });
+      }
+      btn.textContent="Работает…";
+      var tries=0;
+      // ищем прогон, созданный только что
+      function findRun(){
+        tries++;
+        if(tries>90){ done("Идёт дольше обычного"); return; }
+        fetch("https://api.github.com/repos/"+repo+"/actions/workflows/"+wf+"/runs?per_page=5&created=%3E"+since,{headers:hdr})
+          .then(function(r){return r.ok?r.json():null;})
+          .then(function(d){
+            var run=d&&d.workflow_runs&&d.workflow_runs[0];
+            if(!run){ setTimeout(findRun,4000); return; }
+            watch(run.id);
+          }).catch(function(){ setTimeout(findRun,5000); });
+      }
+      function watch(id){
+        tries++;
+        if(tries>90){ done("Идёт дольше обычного"); return; }
+        fetch("https://api.github.com/repos/"+repo+"/actions/runs/"+id,{headers:hdr})
+          .then(function(r){return r.ok?r.json():null;})
+          .then(function(run){
+            if(!run){ setTimeout(function(){watch(id);},5000); return; }
+            if(run.status!=="completed"){
+              btn.textContent = run.status==="queued" ? "В очереди…" : "Работает…";
+              setTimeout(function(){watch(id);},5000); return;
+            }
+            btn.disabled=false;
+            if(run.conclusion==="success"){
+              done("Готово ✓");
+              if(window.admToast) admToast("Агент отработал. Обновите раздел, чтобы увидеть результат.");
+            } else {
+              done("Ошибка ✗");
+              alert("Агент завершился со статусом «"+run.conclusion+"».\nОткройте журнал прогона:\n"+run.html_url);
+            }
+          }).catch(function(){ setTimeout(function(){watch(id);},6000); });
+      }
+      setTimeout(findRun,3000);
+    }).catch(function(e){ btn.textContent=old; btn.disabled=false; alert("Ошибка сети: "+e); });
   };
 
   var tt;window.admToast=function(m){var t=document.getElementById("adm-toast");if(!t){t=document.createElement("div");t.id="adm-toast";t.style.cssText="position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#0F172A;color:#fff;padding:11px 20px;border-radius:10px;font:500 13px Inter,sans-serif;z-index:9999;opacity:0;transition:.25s";document.body.appendChild(t);}t.textContent=m;t.style.opacity="1";clearTimeout(tt);tt=setTimeout(function(){t.style.opacity="0";},1700);};
@@ -4798,7 +4957,7 @@ function renderAnMd(text){
     document.querySelectorAll("#sec-admin .adm-tab").forEach(function(b){b.onclick=function(){document.querySelectorAll("#sec-admin .adm-tab").forEach(function(x){x.classList.remove("on");});document.querySelectorAll("#sec-admin .adm-pane").forEach(function(x){x.classList.remove("on");});b.classList.add("on");document.getElementById("adm-"+b.dataset.t).classList.add("on");};});
     document.querySelectorAll("#sec-admin .adm-seg button").forEach(function(b){b.onclick=function(){document.querySelectorAll("#sec-admin .adm-seg button").forEach(function(x){x.classList.remove("on");});b.classList.add("on");period=b.dataset.r;admRenderTokens();};});
   }
-  function init(){if(!document.getElementById("adm-agents"))return;bind();admRenderAgents();admRenderProv();admApplyBrand();admRenderTokens();}
+  function init(){if(!document.getElementById("adm-agents"))return;bind();admRenderAgents();admRenderProv();admApplyBrand();admRenderTokens();admLoadFromGit(false);}
   if(document.readyState!=="loading")init();else document.addEventListener("DOMContentLoaded",init);
 })();
 </script></body>
