@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-07-fix13 -->
+<!DOCTYPE html><!-- v2026-09-07-fix14 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -444,7 +444,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 07.09 · fix13</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 07.09 · fix14</div>
   </div>
 </aside>
 
@@ -3011,8 +3011,12 @@ function stratRenderContent(md){
   // Раньше в этом случае панель писала «Разделы стратегии не найдены»;
   // теперь показываем документ целиком.
   if(!stratHtml){
-    var whole = md.trim();
-    stratHtml = whole ? '<div class="strat-text">'+pcpyMd(whole)+'</div>' : '';
+    // Дневной формат: во вкладке «Стратегия» показываем только служебную часть —
+    // шапку дня, «Паспорт дня», «Сводку площадки» и «Расписание».
+    // Сами публикации уходят на вкладки площадок.
+    var headPart = md.split(/\n(?=###\s*Публикация)/)[0];
+    headPart = headPart.replace(/\n\s*---\s*$/,'').trim();
+    stratHtml = headPart ? '<div class="strat-text">'+pcpyMd(headPart)+'</div>' : '';
   }
   _stratPanels['all'] = stratHtml
     ? '<div class="card" style="padding:20px 22px">'+stratHtml+'</div>'
@@ -3051,33 +3055,53 @@ function stratRenderContent(md){
   });
 
   ['dzen','vk','tenchat','welcome','vc','mitt','tilda'].forEach(function(pl){
+    // 1) Дневной формат — главный путь: раздел «## <Площадка>», порезанный
+    //    на «### Публикация №N». Проверяем его ПЕРВЫМ, иначе старый разбор
+    //    по разделителям затягивал в панель ещё и шапку дня.
+    var sect = null;
+    h2parts.forEach(function(part){
+      var hm2 = part.match(/^## ([^\n]+)/);
+      if(!hm2 || sect) return;
+      var t2 = hm2[1].trim().toLowerCase();
+      for(var ki2=0; ki2<platKeys[pl].length; ki2++){
+        if(t2.indexOf(platKeys[pl][ki2]) >= 0){ sect = part; break; }
+      }
+    });
+    var pubs = sect
+      ? sect.split(/\n(?=###\s*Публикация)/).slice(1)
+            .map(function(b){ return b.replace(/\n\s*---\s*$/,'').trim(); })
+            .filter(function(b){ return b.length > 20; })
+      : [];
+
+    if(pubs.length){
+      _stratPanels[pl] = '<div style="padding:4px 0">' + pubs.map(function(b){
+        var t = (b.match(/^###\s*([^\n]+)/)||[])[1] || 'Публикация';
+        var body = b.replace(/^###\s*[^\n]+\n/,'').trim();
+        return '<div style="border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:12px">'
+          +'<div style="font-size:12px;font-weight:700;color:var(--blue);margin-bottom:10px">'+escHtml(t)+'</div>'
+          +'<div class="strat-text">'+pcpyMd(body)+'</div></div>';
+      }).join('') + '</div>';
+      return;
+    }
+
+    // 2) Старый недельный формат — блоки по разделителям
     var blocks = platBlocks[pl];
     if(blocks.length){
-      var html = blocks.map(function(b,i){
-        var cleanB = b
-          .replace(/^(Угол|Площадка|CTA-тип|Формат|Структура|Примечание для постинга|🗒 Постинг)[^\n]*\n?/gim,'')
-          .trim();
+      _stratPanels[pl] = '<div style="padding:4px 0">' + blocks.map(function(b){
+        var cleanB = b.replace(/^(Угол|Площадка|CTA-тип|Формат|Структура|Примечание для постинга|🗒 Постинг)[^\n]*\n?/gim,'').trim();
         return '<div style="border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:12px">'+pcpyMd(cleanB)+'</div>';
-      }).join('');
-      _stratPanels[pl] = '<div style="padding:4px 0">'+html+'</div>';
-    } else {
-      // запасной путь для дневного формата: раздел «## <Площадка>» целиком
-      var sect = null;
-      h2parts.forEach(function(part){
-        var hm2 = part.match(/^## ([^\n]+)/);
-        if(!hm2 || sect) return;
-        var t2 = hm2[1].trim().toLowerCase();
-        for(var ki2=0; ki2<platKeys[pl].length; ki2++){
-          if(t2.indexOf(platKeys[pl][ki2]) >= 0){
-            sect = part.replace(/^## [^\n]+\n/, '').trim();
-            break;
-          }
-        }
-      });
-      _stratPanels[pl] = sect
-        ? '<div class="card" style="padding:20px 22px"><div class="strat-text">'+pcpyMd(sect)+'</div></div>'
-        : '<div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">Публикаций для этой площадки не найдено в файле стратегии</div>';
+      }).join('') + '</div>';
+      return;
     }
+
+    // 3) Раздел площадки есть, но публикаций в нём нет — показываем как есть
+    if(sect){
+      _stratPanels[pl] = '<div class="card" style="padding:20px 22px"><div class="strat-text">'
+        +pcpyMd(sect.replace(/^## [^\n]+\n/,'').trim())+'</div></div>';
+      return;
+    }
+
+    _stratPanels[pl] = '<div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">Публикаций для этой площадки не найдено в файле стратегии</div>';
   });
 
   window._pcpyPubs = [];
