@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-02-fix8 -->
+<!DOCTYPE html><!-- v2026-09-02-fix11 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -444,7 +444,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 02.09 · fix8</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 02.09 · fix11</div>
   </div>
 </aside>
 
@@ -715,7 +715,8 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
 <!-- ══ ПУБЛИКАЦИИ: КОПИРАЙТЕР ══ -->
 <section class="section" id="sec-pub-copy">
   <div class="sec-title">ИИ-<span>Копирайтер-Публицист</span></div>
-  <div class="sec-desc">Публикации из neuru-publish/social/copy/ по датам и площадкам.</div>
+  <div class="sec-desc">Публикации по площадкам на день. Запуск: ежедневно в 13:00.</div>
+  <button class="run-btn" onclick="runAgent('agents-pub-copywriter.yml',this)">▶ Запуск сейчас</button>
 
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
     <div style="display:flex;align-items:center;gap:10px">
@@ -743,6 +744,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     <button class="pcpy-tab" onclick="copySelectCopyTab(this,'welcome')">🌟 Welcome Times</button>
     <button class="pcpy-tab" onclick="copySelectCopyTab(this,'vc')">🔷 VC.ru</button>
     <button class="pcpy-tab" onclick="copySelectCopyTab(this,'mitt')">🏨 MITT Connect</button>
+    <button class="pcpy-tab" onclick="copySelectCopyTab(this,'tilda')">🌐 Сайт Тильда</button>
   </div>
 
   <div id="copy-body">
@@ -753,7 +755,8 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
 <!-- ══ ПУБЛИКАЦИИ: КОПИРАЙТЕР-ПУБЛИЦИСТ ══ -->
 <section class="section" id="sec-pub-copyist">
   <div class="sec-title">ИИ-<span>Стратег-Публицист</span></div>
-  <div class="sec-desc">Стратегии из neuru-publish/social/strategy/ по датам.</div>
+  <div class="sec-desc">Стратегия публикаций на день. Запуск: ежедневно в 12:00.</div>
+  <button class="run-btn" onclick="runAgent('agents-pub-strateg.yml',this)">▶ Запуск сейчас</button>
 
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
     <div style="display:flex;align-items:center;gap:10px">
@@ -2845,15 +2848,27 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
 var PUB_REPO = 'Elenafromsochi/neuru-publish';
 var PCPY_PLATFORM_LABELS = {
   dzen:'📰 Дзен', vk:'💙 ВКонтакте', tenchat:'🤝 ТенЧат',
-  welcome:'🌟 Welcome Times', vc:'🔷 VC.ru', mitt:'🏨 MITT Connect'
+  welcome:'🌟 Welcome Times', vc:'🔷 VC.ru', mitt:'🏨 MITT Connect',
+  tilda:'🌐 Сайт Тильда'
 };
 var PCPY_PLATFORM_MAP = {
   'дзен':'dzen','dzen':'dzen','вконтакте':'vk','вк':'vk','vk':'vk',
   'тенчат':'tenchat','tenchat':'tenchat','ten chat':'tenchat',
   'welcome times':'welcome','welcome':'welcome',
-  'vc.ru':'vc','vc':'vc','mitt connect':'mitt','mitt':'mitt'
+  'vc.ru':'vc','vc':'vc','mitt connect':'mitt','mitt':'mitt',
+  'сайт тильда':'tilda','тильда':'tilda','tilda':'tilda'
 };
 
+
+// Пробует дневное имя файла, при 404 — старое недельное.
+// Имена сменились при переходе публицистов на ежедневный цикл;
+// файлы прошлых недель должны продолжать открываться.
+function pubFetchWithFallback(pathNew, pathOld, cb){
+  pubFetchRaw(pathNew, function(status, text){
+    if(status===200 && text) return cb(status, text);
+    pubFetchRaw(pathOld, cb);
+  });
+}
 
 // Загрузка файла через Raw URL (быстро, без авторизации для публичных репо)
 function pubFetchRaw(path, cb){
@@ -2926,7 +2941,7 @@ function stratInitCal(){
       try{
         var files = JSON.parse(text);
         if(Array.isArray(files)) files.forEach(function(f){
-          var m = f.name.match(/social-week-(\d{2}\.\d{2}\.\d{4})\.md/);
+          var m = f.name.match(/social-(?:week-)?(\d{2}\.\d{2}\.\d{4})\.md/);
           if(m) stratCalDates.push(m[1]);
         });
       }catch(e){}
@@ -2962,7 +2977,8 @@ function stratCalSelect(dateStr){
   var tabs = document.getElementById('pcpy-tabs');
   body.innerHTML = '<div class="loading"><div class="spinner"></div>Загрузка стратегии за '+dateStr+'…</div>';
   if(tabs) tabs.style.display = 'none';
-  pubFetchRaw('social/strategy/social-week-'+dateStr+'.md', function(status, text){
+  pubFetchWithFallback('social/strategy/social-'+dateStr+'.md',
+                       'social/strategy/social-week-'+dateStr+'.md', function(status, text){
     if(status===200 && text){
       stratRenderContent(text);
       if(tabs) tabs.style.display = 'flex';
@@ -3111,7 +3127,7 @@ function copyInitCal(){
       try{
         var files = JSON.parse(text);
         if(Array.isArray(files)) files.forEach(function(f){
-          var m = f.name.match(/copy-week-(\d{2}\.\d{2}\.\d{4})-/);
+          var m = f.name.match(/copy-(?:week-)?(\d{2}\.\d{2}\.\d{4})-/);
           if(m && copyCalDates.indexOf(m[1])<0) copyCalDates.push(m[1]);
         });
       }catch(e){}
@@ -3172,8 +3188,8 @@ function copyLoadPlatform(dateStr, platform){
     return;
   }
   body.innerHTML = '<div class="loading"><div class="spinner"></div>Загрузка публикаций '+PCPY_PLATFORM_LABELS[platform]+'…</div>';
-  var fname = 'social/copy/copy-week-'+dateStr+'-'+platform+'.md';
-  pubFetchRaw(fname, function(status, text){
+  pubFetchWithFallback('social/copy/copy-'+dateStr+'-'+platform+'.md',
+                       'social/copy/copy-week-'+dateStr+'-'+platform+'.md', function(status, text){
     if(!_copyPlatformCache[dateStr]) _copyPlatformCache[dateStr] = {};
     _copyPlatformCache[dateStr][platform] = (status===200 && text) ? text : null;
     copyRenderPlatform(platform, _copyPlatformCache[dateStr][platform]);
