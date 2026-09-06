@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-02-fix11 -->
+<!DOCTYPE html><!-- v2026-09-02-fix12 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -444,7 +444,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 02.09 · fix11</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 02.09 · fix12</div>
   </div>
 </aside>
 
@@ -656,13 +656,6 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
 
 
 <!-- ══ ПУБЛИКАЦИИ: НОВОСТНИК ══ -->
-<section class="section" id="sec-pub-news">
-  <div class="sec-title">ИИ-<span>Новостник</span></div>
-  <div class="sec-desc">Подборка новостей об ИИ в отелях. Выберите новость и отправьте её в ИИ-Интервьюер или ИИ-Стратег-Публицист.</div>
-  <div id="pub-news-panel">
-    <div class="empty"><div class="empty-icon">📰</div><div>Новостник для отдела публикаций<br>использует те же данные что и раздел ИИ-Новостник.<br><br>Перейдите в <strong>ИИ-Новостник</strong>, выберите дату и новость,<br>затем нажмите «Отправить в публикации».</div></div>
-  </div>
-</section>
 
 <!-- ══ ПУБЛИКАЦИИ: ИНТЕРВЬЮЕР ══ -->
 <section class="section" id="sec-pub-interview">
@@ -702,15 +695,6 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
 </section>
 
 <!-- ══ ПУБЛИКАЦИИ: СТРАТЕГ ══ -->
-<section class="section" id="sec-pub-strategy">
-  <div class="sec-title">ИИ-<span>Стратег</span></div>
-  <div class="sec-desc">Стратегия публикаций на неделю для 7 каналов. Запуск: каждый понедельник в 9:00.</div>
-  <button class="run-btn" onclick="runAgent('agents-pub-strateg.yml',this)">▶ Запуск сейчас</button>
-  <div class="card">
-    <div class="card-hdr"><div class="card-title">🎯 Стратегия публикаций</div><button onclick="buildPubStrategy()" style="background:var(--grad);color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">▶ Построить стратегию</button></div>
-    <div id="pub-strategy-result" style="font-size:13px;color:var(--muted);padding:20px;text-align:center">Выберите новость в ИИ-Новостнике, затем нажмите «Построить стратегию»</div>
-  </div>
-</section>
 
 <!-- ══ ПУБЛИКАЦИИ: КОПИРАЙТЕР ══ -->
 <section class="section" id="sec-pub-copy">
@@ -2749,27 +2733,9 @@ function closeModal(){ document.getElementById('modal-ov').classList.remove('ope
 
 var pubSelectedNews=null, interviewHistory=[], interviewAnswers=[], interviewQuestionCount=0, currentPlatform='dzen', pubApprovedArticles=[];
 
-var PLATFORM_PROMPTS={
-  dzen:'Напиши экспертную статью для Дзена от имени Вероники Войновой, основателя НЭЙРУ. Тема: {NEWS}. База знаний: {KB}. 1500-2500 слов, личный экспертный стиль, заголовок + статья.',
-  vk:'Напиши пост для ВКонтакте от имени Вероники Войновой (НЭЙРУ). Тема: {NEWS}. База знаний: {KB}. 800-1200 символов, разговорный стиль, хэштеги в конце.',
-  tenchat:'Напиши пост для Тенчат от имени Вероники Войновой (НЭЙРУ). Тема: {NEWS}. База знаний: {KB}. 600-1000 символов, деловой тон.',
-  vc:'Напиши статью для VC.ru от имени Вероники Войновой. Тема: {NEWS}. База знаний: {KB}. 1000-1800 слов, аналитический стиль.',
-  mitt:'Напиши статью для MITT Connect (отельеры) от имени Вероники Войновой. Тема: {NEWS}. База знаний: {KB}. 800-1200 слов.',
-  welcome:'Напиши статью для Welcome Times от имени Вероники Войновой. Тема: {NEWS}. База знаний: {KB}. 600-900 слов.'
-};
-
-var IMAGE_PROMPT='Создай горизонтальную фотореалистичную обложку 16:9. Используй прикреплённую фотографию как референс внешности героини. Сохрани черты лица, цвет волос, возраст. Стиль — профессиональная редакционная фотография. Без логотипов и надписей. Формат 16:9.';
 
 function saveKB(){ var t=document.getElementById('kb-text').value.trim(); if(t){ localStorage.setItem('neuru_kb',t); document.getElementById('kb-status').textContent='Сохранена ✓'; document.getElementById('kb-status').style.color='#10B981'; } }
 function loadKB(){ var t=localStorage.getItem('neuru_kb')||''; var el=document.getElementById('kb-text'); if(el&&t){ el.value=t; var st=document.getElementById('kb-status'); if(st) st.textContent='Загружена ✓'; } return t; }
-
-function selectPlatform(el,platform){
-  document.querySelectorAll('.pub-platform-tab').forEach(function(t){ t.classList.remove('active'); });
-  el.classList.add('active'); currentPlatform=platform;
-  var names={dzen:'📰 Дзен',vk:'💙 ВКонтакте',tenchat:'🤝 Тенчат',vc:'🔷 VC.ru',mitt:'🏨 MITT Connect',welcome:'🌟 Welcome Times'};
-  var pt=document.getElementById('platform-title'); if(pt) pt.textContent=(names[platform]||platform)+' — промпт для статьи';
-  var pp=document.getElementById('platform-prompt'); if(pp) pp.value=PLATFORM_PROMPTS[platform]||'';
-}
 
 function sendToInterview(news){ pubSelectedNews=news; showSec('pub-interview',document.querySelector('[onclick*="pub-interview"]')); var el=document.getElementById('interview-news-text'); if(el){ el.style.fontStyle='normal'; el.style.color='var(--text)'; el.textContent=news.title+(news.body?' — '+news.body.substring(0,200)+'…':''); } }
 function sendToStrategy(news){
@@ -3700,46 +3666,6 @@ function generateArticles(){
   callClaude('Ты контент-стратег.',[{role:'user',content:prompt}],function(reply){ var msgs=document.getElementById('interview-messages'); var last=msgs.lastChild; if(last) last.textContent=reply; showSec('pub-copy',null); });
 }
 
-function buildPubStrategy(){
-  if(!pubSelectedNews){ document.getElementById('pub-strategy-result').textContent='Выберите новость'; return; }
-  var kb=loadKB(); var el=document.getElementById('pub-strategy-result');
-  el.innerHTML='<div class="loading"><div class="spinner"></div>Строю стратегию...</div>';
-  var prompt='Построй контент-стратегию на 10 статей для блога Вероники Войновой (НЭЙРУ). Новость: '+pubSelectedNews.title+' '+(pubSelectedNews.body||'')+(kb?' База знаний: '+kb:'')+' Для каждой: 1. Заголовок 2. Платформа 3. Угол 4. Аудитория. Нумерованный список.';
-  callClaude('Ты контент-стратег B2B HotelTech.',[{role:'user',content:prompt}],function(reply){ el.innerHTML='<div class="strat-text">'+mdSimple(reply)+'</div>'; });
-}
-
-function writePubArticle(){
-  if(!pubSelectedNews){ alert('Сначала выберите новость'); return; }
-  var kb=loadKB(); var promptTemplate=document.getElementById('platform-prompt').value||PLATFORM_PROMPTS[currentPlatform]||'';
-  var newsText=pubSelectedNews.title+' '+(pubSelectedNews.body||'');
-  var prompt=promptTemplate.replace('{NEWS}',newsText).replace('{KB}',kb||'');
-  var card=document.getElementById('pub-article-card'); var textEl=document.getElementById('pub-article-text');
-  if(card) card.style.display='block';
-  if(textEl) textEl.innerHTML='<div class="loading"><div class="spinner"></div>Пишу статью...</div>';
-  callClaude('Ты профессиональный копирайтер.',[{role:'user',content:prompt}],function(reply){ if(textEl) textEl.innerHTML=mdSimple(reply); var imgEl=document.getElementById('pub-image-prompt'); if(imgEl) imgEl.textContent=IMAGE_PROMPT; });
-}
-
-function copyPubArticle(){ var t=document.getElementById('pub-article-text'); if(t) navigator.clipboard.writeText(t.innerText).then(function(){ alert('Скопировано!'); }); }
-function copyImagePrompt(){ var t=document.getElementById('pub-image-prompt'); if(t) navigator.clipboard.writeText(t.textContent).then(function(){ alert('Промпт скопирован!'); }); }
-
-function approvePubArticle(){
-  var title=document.getElementById('platform-title')?document.getElementById('platform-title').textContent:'';
-  var text=document.getElementById('pub-article-text')?document.getElementById('pub-article-text').innerText:'';
-  pubApprovedArticles.push({platform:currentPlatform,title:title,text:text,date:new Date().toLocaleDateString('ru')});
-  renderPubQueue(); showSec('pub-post',null);
-}
-
-function renderPubQueue(){
-  var el=document.getElementById('pub-queue'); if(!el) return;
-  if(!pubApprovedArticles.length){ el.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted)">Одобренные статьи появятся здесь</div>'; return; }
-  var icons={dzen:'📰',vk:'💙',tenchat:'🤝',vc:'🔷',mitt:'🏨',welcome:'🌟'};
-  el.innerHTML=pubApprovedArticles.map(function(a,i){
-    return '<div style="display:flex;align-items:center;gap:12px;padding:12px;border-bottom:1px solid var(--border)"><span style="font-size:20px">'+(icons[a.platform]||'📄')+'</span><div style="flex:1"><div style="font-size:13px;font-weight:600">'+a.title+'</div><div style="font-size:11px;color:var(--muted)">'+a.date+'</div></div><button onclick="copyQueueItem('+i+')" style="background:none;border:1px solid var(--border);border-radius:7px;padding:5px 12px;font-size:11px;cursor:pointer;font-family:inherit">Скопировать</button></div>';
-  }).join('');
-}
-
-function copyQueueItem(i){ if(pubApprovedArticles[i]) navigator.clipboard.writeText(pubApprovedArticles[i].text).then(function(){ alert('Скопировано!'); }); }
-
 function callClaude(systemPrompt,messages,callback){
   var payload={model:'claude-sonnet-4-6',max_tokens:2000,system:systemPrompt,messages:messages};
   var xhr=new XMLHttpRequest();
@@ -4067,7 +3993,6 @@ document.addEventListener('DOMContentLoaded', function(){
   setTimeout(function(){ var today=document.querySelector('.cal-d.today'); if(today) today.click(); },300);
   updateCopySlider();
   loadKB();
-  var pp=document.getElementById('platform-prompt'); if(pp) pp.value=PLATFORM_PROMPTS['dzen']||'';
   setTimeout(function(){ document.querySelectorAll('.bar-fill').forEach(function(b){ var w=b.style.width; b.style.width='0%'; setTimeout(function(){ b.style.width=w; },100); }); },300);
 });
 
