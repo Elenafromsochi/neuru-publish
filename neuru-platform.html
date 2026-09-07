@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-07-fix23 -->
+<!DOCTYPE html><!-- v2026-09-07-fix24 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -444,7 +444,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 07.09 · fix23</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 07.09 · fix24</div>
   </div>
 </aside>
 
@@ -4391,7 +4391,21 @@ function callClaude(systemPrompt,messages,callback){
   var xhr=new XMLHttpRequest();
   xhr.open('POST',CLAUDE_PROXY,true);
   xhr.setRequestHeader('Content-Type','application/json');
-  xhr.onload=function(){ try{ var json=JSON.parse(xhr.responseText); var text=json.content&&json.content[0]?json.content[0].text:'Ошибка ответа'; callback(text); } catch(e){ callback('Ошибка: '+xhr.responseText.substring(0,100)); } };
+  xhr.onload=function(){
+    var raw = xhr.responseText || '';
+    var json = null; try{ json = JSON.parse(raw); }catch(e){}
+    if(!json){ callback('Прокси вернул не JSON (код '+xhr.status+'): '+raw.substring(0,300)); return; }
+    // Формат Claude: content[0].text. Формат DeepSeek/OpenAI: choices[0].message.content.
+    var text = null;
+    if(json.content && json.content[0] && json.content[0].text) text = json.content[0].text;
+    else if(json.choices && json.choices[0] && json.choices[0].message) text = json.choices[0].message.content;
+    else if(typeof json.text === 'string') text = json.text;
+    if(text){ callback(String(text)); return; }
+    // Ответ есть, но текста в нём нет — показываем, что именно пришло
+    var err = (json.error && (json.error.message || json.error.type)) || json.message || '';
+    callback('Прокси ответил без текста (код '+xhr.status+')'
+      + (err ? ': '+err : '') + '\n\nОтвет целиком:\n' + raw.substring(0, 400));
+  };
   xhr.onerror=function(){ callback('Ошибка сети — проверь прокси: '+CLAUDE_PROXY); };
   xhr.send(JSON.stringify(payload));
 }
