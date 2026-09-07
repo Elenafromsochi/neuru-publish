@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-07-fix14 -->
+<!DOCTYPE html><!-- v2026-09-07-fix15 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -444,7 +444,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 07.09 · fix14</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 07.09 · fix15</div>
   </div>
 </aside>
 
@@ -2973,6 +2973,9 @@ var _stratPanels = {};
 var _stratPubs = [];
 
 function stratRenderContent(md){
+  // Нормализация: переводы строк Windows, неразрывные пробелы и «мягкие» дефисы
+  // приходят из markdown моделей и ломали поиск заголовков публикаций.
+  md = String(md||'').replace(/\r\n?/g,'\n').replace(/\u00A0/g,' ').replace(/\u00AD/g,'');
   // ── Шаги стратегии для панели "Стратегия" ──
   var stratHtml = '';
   var stepNames = {
@@ -3014,7 +3017,8 @@ function stratRenderContent(md){
     // Дневной формат: во вкладке «Стратегия» показываем только служебную часть —
     // шапку дня, «Паспорт дня», «Сводку площадки» и «Расписание».
     // Сами публикации уходят на вкладки площадок.
-    var headPart = md.split(/\n(?=###\s*Публикация)/)[0];
+    var PUB_SPLIT = /\n(?=#{2,4}[ \t]*\u041f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438[\u044f\u0438][ \t]*\u2116?[ \t]*\d+)/;
+    var headPart = md.split(PUB_SPLIT)[0];
     headPart = headPart.replace(/\n\s*---\s*$/,'').trim();
     stratHtml = headPart ? '<div class="strat-text">'+pcpyMd(headPart)+'</div>' : '';
   }
@@ -3067,16 +3071,17 @@ function stratRenderContent(md){
         if(t2.indexOf(platKeys[pl][ki2]) >= 0){ sect = part; break; }
       }
     });
+    var PUB_SPLIT = /\n(?=#{2,4}[ \t]*\u041f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438[\u044f\u0438][ \t]*\u2116?[ \t]*\d+)/;
     var pubs = sect
-      ? sect.split(/\n(?=###\s*Публикация)/).slice(1)
+      ? sect.split(PUB_SPLIT).slice(1)
             .map(function(b){ return b.replace(/\n\s*---\s*$/,'').trim(); })
             .filter(function(b){ return b.length > 20; })
       : [];
 
     if(pubs.length){
       _stratPanels[pl] = '<div style="padding:4px 0">' + pubs.map(function(b){
-        var t = (b.match(/^###\s*([^\n]+)/)||[])[1] || 'Публикация';
-        var body = b.replace(/^###\s*[^\n]+\n/,'').trim();
+        var t = (b.match(/^#{2,4}[ \t]*([^\n]+)/)||[])[1] || 'Публикация';
+        var body = b.replace(/^#{2,4}[ \t]*[^\n]+\n/,'').trim();
         return '<div style="border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:12px">'
           +'<div style="font-size:12px;font-weight:700;color:var(--blue);margin-bottom:10px">'+escHtml(t)+'</div>'
           +'<div class="strat-text">'+pcpyMd(body)+'</div></div>';
@@ -3096,7 +3101,14 @@ function stratRenderContent(md){
 
     // 3) Раздел площадки есть, но публикаций в нём нет — показываем как есть
     if(sect){
-      _stratPanels[pl] = '<div class="card" style="padding:20px 22px"><div class="strat-text">'
+      // Раздел площадки нашли, а публикаций в нём нет — говорим об этом прямо,
+      // чтобы не гадать, почему вкладка выглядит как копия «Стратегии».
+      var seen = (sect.match(/^#{2,4}[ \t]*[^\n]*Публикаци/gm)||[]).length;
+      _stratPanels[pl] = '<div style="font-size:12px;color:var(--muted);background:var(--bg);'
+        +'border-radius:8px;padding:10px 12px;margin-bottom:12px">Публикации в разделе не распознаны. '
+        +'Заголовков со словом «Публикация» найдено: '+seen+'. Ожидается вид «### Публикация №1 — 12:00». '
+        +'Ниже — раздел целиком.</div>'
+        +'<div class="card" style="padding:20px 22px"><div class="strat-text">'
         +pcpyMd(sect.replace(/^## [^\n]+\n/,'').trim())+'</div></div>';
       return;
     }
