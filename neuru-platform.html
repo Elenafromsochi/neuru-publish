@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-07-fix22 -->
+<!DOCTYPE html><!-- v2026-09-07-fix23 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -444,7 +444,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 07.09 · fix22</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 07.09 · fix23</div>
   </div>
 </aside>
 
@@ -3829,6 +3829,219 @@ function copyRenderPlatform(platform, md){
   window._copyArticles = articles;
 }
 
+
+// ═══ ШАГ ИЛЛЮСТРАЦИИ перед отправкой в постинг ═══
+var _imgStep = null;   // {text, platform, dateStr, num, btn, imgData, imgExt, prompt}
+
+function imgEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// Промпт для картинки, который написал копирайтер
+function imgPromptFromText(t){
+  var m = String(t||'').match(/Промпт\s+для\s+картинки\s*:?\s*([\s\S]*?)(?:\n\s*\n|\nЗнаков|\nХэштеги|$)/i);
+  return m ? m[1].trim() : '';
+}
+
+window.openImageStep = function(text, platform, dateStr, num, btn){
+  _imgStep = { text:text, platform:platform, dateStr:dateStr, num:num, btn:btn,
+               imgData:'', imgExt:'', prompt: imgPromptFromText(text) };
+  var ov = document.getElementById('img-step-ov');
+  if(!ov){
+    ov = document.createElement('div');
+    ov.id = 'img-step-ov';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,20,35,.55);z-index:9999;'
+      + 'display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto';
+    ov.onclick = function(e){ if(e.target===ov) closeImageStep(); };
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML = imgStepHtml();
+  setTimeout(function(){ window.imgUpdateReady(); }, 0);
+  ov.style.display = 'flex';
+  document.addEventListener('paste', imgOnPaste);
+};
+window.closeImageStep = function(){
+  var ov = document.getElementById('img-step-ov');
+  if(ov) ov.style.display = 'none';
+  document.removeEventListener('paste', imgOnPaste);
+};
+
+function imgStepHtml(){
+  var s = _imgStep;
+  var card = 'background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-bottom:14px';
+  return '<div style="background:var(--bg);border-radius:18px;max-width:720px;width:100%;padding:22px 24px 26px;box-shadow:var(--shadow2)">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+    +'<div style="font-size:17px;font-weight:800;color:var(--text)">Иллюстрация к публикации '+s.num+'</div>'
+    +'<button onclick="closeImageStep()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted)">×</button></div>'
+    +'<div style="font-size:12px;color:var(--muted);margin-bottom:16px">'+imgEsc(s.platform)+' · '+imgEsc(s.dateStr)
+    +'. Выберите один из трёх способов — или сохраните без картинки.</div>'
+
+    // 1. Фото
+    +'<div style="'+card+'">'
+    +'<div style="font-size:13px;font-weight:700;margin-bottom:8px;color:var(--text)">1. Добавить фото</div>'
+    +'<input type="file" accept="image/*" onchange="imgPickFile(this)" style="font-size:12px;font-family:inherit">'
+    +'</div>'
+
+    // 2. Скриншот
+    +'<div style="'+card+'">'
+    +'<div style="font-size:13px;font-weight:700;margin-bottom:8px;color:var(--text)">2. Добавить скриншот</div>'
+    +'<div id="img-paste-zone" style="border:2px dashed var(--border);border-radius:12px;padding:18px;'
+    +'text-align:center;font-size:12px;color:var(--muted)">Сделайте снимок экрана и нажмите Cmd+V прямо здесь.<br>'
+    +'Файл можно и перетащить в это поле.</div>'
+    +'</div>'
+
+    // 3. Промпт
+    +'<div style="'+card+'">'
+    +'<div style="font-size:13px;font-weight:700;margin-bottom:8px;color:var(--text)">3. Промпт для иллюстрации</div>'
+    +'<textarea id="img-prompt" oninput="window.imgUpdateReady()" style="width:100%;box-sizing:border-box;min-height:90px;font-family:inherit;'
+    +'font-size:12px;line-height:1.65;border:1px solid var(--border);border-radius:10px;padding:10px;'
+    +'background:var(--card);color:var(--text);resize:vertical">'+imgEsc(s.prompt)+'</textarea>'
+    +'<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'
+    +'<button onclick="imgGenPrompt(this)" style="background:var(--grad);color:#fff;border:none;border-radius:8px;'
+    +'padding:8px 15px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">✨ Генерация</button>'
+    +'<button onclick="imgCopyPrompt()" style="background:none;border:1px solid var(--border);border-radius:8px;'
+    +'padding:8px 15px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--text)">Скопировать</button>'
+    +'</div></div>'
+
+    +'<div id="img-preview" style="margin-bottom:14px"></div>'
+    +'<div id="img-status" style="font-size:12px;color:var(--muted);margin-bottom:12px"></div>'
+    +'<div style="display:flex;gap:9px;flex-wrap:wrap">'
+    +'<button id="img-send" onclick="imgSaveToGit(this)" disabled style="background:#9AA3B8;color:#fff;border:none;border-radius:9px;'
+    +'padding:10px 20px;font-size:13px;font-weight:700;cursor:not-allowed;font-family:inherit">Отправить в постинг</button>'
+    +'<div id="img-hint" style="font-size:12px;color:var(--muted);margin-top:8px">Выберите один из трёх вариантов выше — фото, скриншот или промпт для иллюстрации.</div>'
+    +'<button onclick="closeImageStep()" style="background:none;border:1px solid var(--border);border-radius:9px;'
+    +'padding:10px 20px;font-size:13px;cursor:pointer;font-family:inherit;color:var(--text)">Отмена</button>'
+    +'</div></div>';
+}
+
+function imgSetFile(file){
+  if(!file || !/^image\//.test(file.type)){ return; }
+  var fr = new FileReader();
+  fr.onload = function(){
+    var d = String(fr.result||'');
+    _imgStep.imgData = d.split(',')[1] || '';
+    _imgStep.imgExt  = (file.type.split('/')[1]||'jpg').replace('jpeg','jpg');
+    var p = document.getElementById('img-preview');
+    if(p) p.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Картинка выбрана:</div>'
+      +'<img src="'+d+'" style="max-width:100%;border-radius:12px;border:1px solid var(--border)">';
+    window.imgUpdateReady();
+  };
+  fr.readAsDataURL(file);
+}
+// Кнопка отправки включается только после выбора одного из трёх вариантов.
+// Раньше статью можно было отправить, вообще не заходя на этот экран глазами.
+window.imgUpdateReady = function(){
+  var s = _imgStep || {};
+  var pr = (document.getElementById('img-prompt')||{}).value || '';
+  var ready = !!s.imgData || pr.trim().length > 20;
+  var b = document.getElementById('img-send');
+  var h = document.getElementById('img-hint');
+  if(!b) return;
+  b.disabled = !ready;
+  b.style.background = ready ? '#059669' : '#9AA3B8';
+  b.style.cursor = ready ? 'pointer' : 'not-allowed';
+  if(h) h.textContent = ready
+    ? (s.imgData ? 'Иллюстрация приложена — можно отправлять.' : 'Промпт готов — можно отправлять, картинку добавите позже.')
+    : 'Выберите один из трёх вариантов выше — фото, скриншот или промпт для иллюстрации.';
+};
+
+window.imgPickFile = function(inp){ if(inp.files && inp.files[0]) imgSetFile(inp.files[0]); };
+function imgOnPaste(e){
+  var items = (e.clipboardData||{}).items || [];
+  for(var i=0;i<items.length;i++){
+    if(items[i].type && items[i].type.indexOf('image')===0){
+      imgSetFile(items[i].getAsFile()); e.preventDefault(); return;
+    }
+  }
+}
+window.imgCopyPrompt = function(){
+  var t = document.getElementById('img-prompt'); if(!t) return;
+  navigator.clipboard.writeText(t.value).then(function(){ alert('Промпт скопирован'); });
+};
+window.imgGenPrompt = function(btn){
+  var ta = document.getElementById('img-prompt'); if(!ta) return;
+  var old = btn.textContent; btn.textContent = 'Генерирую…'; btn.disabled = true;
+  var sys = 'Ты арт-директор. Пишешь промпты для генерации фотореалистичных иллюстраций к статьям '
+    + 'о гостиничном бизнесе. Отвечай ОДНИМ абзацем на русском, без вступлений и списков.';
+  var user = 'Статья:\n' + _imgStep.text.slice(0, 2500)
+    + '\n\nЧерновой промпт от копирайтера:\n' + (ta.value || '(нет)')
+    + '\n\nНапиши улучшенный промпт для иллюстрации: что в кадре, ракурс, свет, настроение, '
+    + 'горизонтальный формат. Без текста и логотипов на изображении, без узнаваемых брендов и лиц знаменитостей.';
+  callClaude(sys, [{role:'user', content:user}], function(reply){
+    ta.value = String(reply||'').trim();
+    btn.textContent = old; btn.disabled = false;
+    window.imgUpdateReady();
+  });
+};
+
+// Отправка в репозиторий: картинка отдельным файлом + markdown со ссылкой на неё
+window.imgSaveToGit = function(btn){
+  var s = _imgStep;
+  var pr0 = (document.getElementById('img-prompt')||{}).value || '';
+  if(!s.imgData && pr0.trim().length <= 20){
+    alert('Сначала выберите вариант иллюстрации: приложите фото, вставьте скриншот или сгенерируйте промпт.');
+    return;
+  }
+  var tok = getToken();
+  if(!tok){ alert('Добавьте GitHub-токен в Админ-панели'); return; }
+  var st = document.getElementById('img-status');
+  btn.disabled = true; btn.textContent = 'Сохраняю…';
+
+  var base = 'social/posting/'+s.dateStr+'/'+s.platform+'/post-'+s.num;
+  var imgPath = s.imgData ? (base+'.'+s.imgExt) : '';
+  var prompt  = (document.getElementById('img-prompt')||{}).value || '';
+
+  var md = s.text.replace(/\*\*([^*]+)\*\*/g,'$1').replace(/\n{3,}/g,'\n\n').trim();
+  if(imgPath) md += '\n\n---\n\nИллюстрация: ![post-'+s.num+'](post-'+s.num+'.'+s.imgExt+')';
+  else if(prompt) md += '\n\n---\n\nПромпт для иллюстрации (картинка не приложена):\n'+prompt;
+
+  function put(path, contentB64, msg, next){
+    var url = 'https://api.github.com/repos/'+PUB_REPO+'/contents/'
+            + path.split('/').map(encodeURIComponent).join('/');
+    var g = new XMLHttpRequest();
+    g.open('GET', url+'?ref=main', true);
+    g.setRequestHeader('Authorization','token '+tok);
+    g.onreadystatechange = function(){
+      if(g.readyState!==4) return;
+      var sha=null; try{ sha = JSON.parse(g.responseText).sha||null; }catch(e){}
+      var body = { message: msg, content: contentB64, branch:'main' };
+      if(sha) body.sha = sha;
+      var p = new XMLHttpRequest();
+      p.open('PUT', url, true);
+      p.setRequestHeader('Authorization','token '+tok);
+      p.setRequestHeader('Content-Type','application/json');
+      p.onreadystatechange = function(){
+        if(p.readyState!==4) return;
+        if(p.status===200||p.status===201) next(null);
+        else { var e2='HTTP '+p.status; try{ e2 = JSON.parse(p.responseText).message; }catch(e){} next(e2); }
+      };
+      p.send(JSON.stringify(body));
+    };
+    g.send();
+  }
+
+  function finish(err){
+    if(err){
+      btn.disabled=false; btn.textContent='Отправить в постинг';
+      if(st) st.innerHTML = '<span style="color:#DC2626">Ошибка: '+imgEsc(err)+'</span>';
+      return;
+    }
+    if(st) st.innerHTML = '<span style="color:#10B981">Отправлено в '+imgEsc(base)+'.md</span>';
+    if(s.btn){ s.btn.textContent='✅ Одобрено'; s.btn.style.background='#047857'; s.btn.disabled=true; }
+    setTimeout(closeImageStep, 900);
+  }
+
+  var mdB64 = btoa(unescape(encodeURIComponent(md)));
+  if(imgPath){
+    if(st) st.textContent = 'Загружаю картинку…';
+    put(imgPath, s.imgData, 'постинг: картинка '+s.platform+' пост '+s.num+' за '+s.dateStr, function(e){
+      if(e) return finish(e);
+      if(st) st.textContent = 'Загружаю текст…';
+      put(base+'.md', mdB64, 'постинг: '+s.platform+' пост '+s.num+' за '+s.dateStr, finish);
+    });
+  } else {
+    put(base+'.md', mdB64, 'постинг: '+s.platform+' пост '+s.num+' за '+s.dateStr, finish);
+  }
+};
+
 function approvePost(btn, idx, platform, dateStr){
   var cache = _copyPlatformCache[dateStr];
   if(!cache || !cache[platform]) return;
@@ -3849,59 +4062,11 @@ function approvePost(btn, idx, platform, dateStr){
 
   var text = (articles[idx]||'').trim();
   if(!text){ alert('Текст публикации не найден'); return; }
-
-  var tok = getToken();
-  if(!tok){ alert('Добавьте GitHub токен'); return; }
-
-  btn.textContent = '⏳ Сохранение…';
-  btn.disabled = true;
-
-  // Убираем ** из текста перед сохранением
-  var cleanText = text
-    .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-
-  var postNum = idx + 1;
-  var path = 'social/posting/'+dateStr+'/'+platform+'/post-'+postNum+'.md';
-  var apiUrl = 'https://api.github.com/repos/'+PUB_REPO+'/contents/'+path.split('/').map(encodeURIComponent).join('/');
-
-  var xhr1 = new XMLHttpRequest();
-  xhr1.open('GET', apiUrl+'?ref=main', true);
-  xhr1.setRequestHeader('Authorization','token '+tok);
-  xhr1.setRequestHeader('Accept','application/vnd.github.v3+json');
-  xhr1.onreadystatechange = function(){
-    if(xhr1.readyState!==4) return;
-    var sha = null;
-    try{ sha = JSON.parse(xhr1.responseText).sha||null; }catch(e){}
-    var payload = {
-      message: 'approve: '+platform+' пост '+postNum+' за '+dateStr,
-      content: btoa(unescape(encodeURIComponent(cleanText))),
-      branch: 'main'
-    };
-    if(sha) payload.sha = sha;
-    var xhr2 = new XMLHttpRequest();
-    xhr2.open('PUT', apiUrl, true);
-    xhr2.setRequestHeader('Authorization','token '+tok);
-    xhr2.setRequestHeader('Accept','application/vnd.github.v3+json');
-    xhr2.setRequestHeader('Content-Type','application/json');
-    xhr2.onreadystatechange = function(){
-      if(xhr2.readyState!==4) return;
-      if(xhr2.status===200||xhr2.status===201){
-        btn.textContent = '✅ Одобрено';
-        btn.style.background = '#047857';
-        btn.disabled = true;
-      } else {
-        btn.textContent = 'Одобрить';
-        btn.disabled = false;
-        try{ console.error(JSON.parse(xhr2.responseText).message); }catch(e){}
-        alert('Ошибка сохранения: '+xhr2.status);
-      }
-    };
-    xhr2.send(JSON.stringify(payload));
-  };
-  xhr1.send();
+  if(!getToken()){ alert('Добавьте GitHub-токен в Админ-панели'); return; }
+  // Перед отправкой в постинг — шаг выбора иллюстрации
+  openImageStep(text, platform, dateStr, idx+1, btn);
 }
+
 
 function copyFullText(btn, idx, platform, dateStr){
   var cache = _copyPlatformCache[dateStr];
