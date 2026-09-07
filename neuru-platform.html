@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-07-fix16 -->
+<!DOCTYPE html><!-- v2026-09-07-fix17 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -444,7 +444,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 07.09 · fix16</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 07.09 · fix17</div>
   </div>
 </aside>
 
@@ -2245,19 +2245,19 @@ function parseCopyMd(md){
 
   var letterTitles = {};
   md.split('\n').forEach(function(l){
-    // Day header: ## ВТОРНИК or ## ЧЕТВЕРГ
-    if(l.match(/^##\s/)){
+    // День: «## ВТОРНИК» либо «# ВТОРНИК» — копирайтер пишет то так, то так
+    if(l.match(/^#{1,2}\s/) && /вторник|четверг/i.test(l)){
       flushSeg(); curSeg = null;
-      var h = l.replace(/^##\s+/,'').toLowerCase();
+      var h = l.replace(/^#{1,4}\s*/,'').toLowerCase();
       if(/вторник/.test(h)) curDay = 'tue';
       else if(/четверг/.test(h)) curDay = 'thu';
       else curDay = null;
       return;
     }
-    // Letter header: ### Письмо N — Город...
-    if(l.match(/^###\s/)){
+    // Письмо: «### Письмо N — Город» либо «## Письмо N — Город»
+    if(l.match(/^#{2,4}\s*Письмо/i)){
       flushSeg();
-      var fullTitle = l.replace(/^###\s+/,'').trim();
+      var fullTitle = l.replace(/^#{1,4}\s*/,'').trim();
       var h = fullTitle.toLowerCase();
       if(/москва/.test(h)) curSeg = 'msk';
       else if(/петербург|спб/.test(h)) curSeg = 'spb';
@@ -4652,7 +4652,22 @@ function loadAnAnalysis(){
     anAnalysisCache[fn] = md;
     el.innerHTML = renderAnAnalysis(md);
   }).catch(function(){
-    el.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">📂 Файл analysis-'+period+'.md не найден.<br><span style="font-size:11px">Запустите /analyze '+period+' в Claude Code для создания анализа.</span></div>';
+    // Файла разбора нет — показываем последнюю запись из журнала аналитика,
+    // чтобы вкладка не выглядела пустой, пока агент не отработал.
+    ghFetch('analytics/journal.md').then(function(j){
+      var parts = String(j||'').split(/\n(?=##\s+Разбор\s)/);
+      var last = parts.length>1 ? parts[parts.length-1] : '';
+      if(last && last.trim().length>50){
+        el.innerHTML = '<div style="font-size:12px;color:var(--muted);background:var(--bg);border-radius:8px;'
+          +'padding:10px 12px;margin-bottom:12px">Отдельного файла <code>analysis-'+period+'.md</code> нет — '
+          +'показана последняя запись из журнала аналитика. Запустите ИИ-Аналитика, чтобы создать разбор недели.</div>'
+          + renderAnAnalysis(last);
+      } else {
+        el.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">📂 Разбор за '+period+' ещё не создан.<br><span style="font-size:11px">Нажмите «Запуск» в этом разделе — Аналитик прочитает статистику и создаст файл.</span></div>';
+      }
+    }).catch(function(){
+      el.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">📂 Разбор за '+period+' ещё не создан.<br><span style="font-size:11px">Нажмите «Запуск» в этом разделе.</span></div>';
+    });
   });
 }
 
