@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-08-fix26 -->
+<!DOCTYPE html><!-- v2026-09-08-fix27 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -444,7 +444,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 08.09 · fix26</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 08.09 · fix27</div>
   </div>
 </aside>
 
@@ -2730,12 +2730,23 @@ function letSaveEdit(k, field, val){
 // Заголовок без пояснений: берём то, что в кавычках, иначе до первого « — »
 function letCleanTitle(s){
   var t = String(s||'').trim().replace(/^\*+|\*+$/g,'');
-  t = t.replace(/^Приём\s*\d+\s*(\(выбран\))?\s*:\s*/i,'')
+  // Снимаем служебный префикс целиком, вместе со скобками:
+  // «Тема А (приём 3 — псевдо-уведомление): Недозвон» → «Недозвон»
+  t = t.replace(/^\s*(Тема|Приём)\s*[A-ZА-Яa-zа-я0-9]{0,3}\s*(\([^)]*\))?\s*[:.\u2014-]\s*/i,'')
        .replace(/^Выбран\s*:?\s*/i,'')
-       .replace(/^[A-CА-В]\.\s*/,'');
-  var q = t.match(/«([^»]*)»/);
+       .replace(/^[A-CА-В][.)]\s*/,'')
+       .trim();
+  // Если после этого есть кавычки — берём то, что в них
+  var q = t.match(/«([^»]{6,})»/);
   if(q) return q[1].trim();
-  return t.split(/\s—\s|\s-\s/)[0].replace(/^«|»$/g,'').trim();
+  // Иначе — строка целиком: тире может быть частью самого заголовка
+  return t.replace(/^«|»$/g,'').trim();
+}
+
+// Признак строки-варианта заголовка. Работает и вне блока «Генератор заголовков»:
+// копирайтер часто пишет темы сразу после названия письма.
+function letIsVariant(raw){
+  return /^\s*\*{0,2}(Тема|Приём)\s*[A-ZА-Яa-zа-я0-9]{0,3}\s*(\([^)]*\))?\s*[:.]/i.test(raw);
 }
 
 // Разбор письма на блоки
@@ -2763,16 +2774,18 @@ function letParse(md){
     var mSel = raw.match(/^\*{0,2}\s*Выбран\s*:?\*{0,2}\s*(.+)$/i);
     if(mSel){ r.chosen = letCleanTitle(mSel[1]); return; }
 
-    // Варианты берём широко: копирайтер пишет их то «Приём N:», то «Тема A.»,
-    // то просто строкой в кавычках. Ловим любую строку с «…» в блоке заголовков.
-    if((cur==='heads' || cur==='themes') && raw){
-      var isVar = /^Приём\s*\d/i.test(raw) || /^[A-CА-В][.)]\s/.test(raw)
-               || /^\*{0,2}Тема\s*[A-CА-В1-3]?\s*[:.]/i.test(raw) || /«[^»]{8,}»/.test(raw);
-      if(isVar){
-        var v = letCleanTitle(raw);
-        if(v && v.length>8 && r.variants.indexOf(v)<0) r.variants.push(v);
-        return;
-      }
+    // Строки «Тема А (…): …» и «Приём N: …» — варианты заголовка,
+    // где бы в письме они ни стояли.
+    if(letIsVariant(raw)){
+      var v = letCleanTitle(raw);
+      if(v && v.length>5 && r.variants.indexOf(v)<0) r.variants.push(v);
+      return;
+    }
+    // Внутри блока заголовков вариантом считаем и строку «A. «…»»
+    if((cur==='heads' || cur==='themes') && raw && (/^[A-CА-В][.)]\s/.test(raw) || /«[^»]{8,}»/.test(raw))){
+      var v2 = letCleanTitle(raw);
+      if(v2 && v2.length>5 && r.variants.indexOf(v2)<0) r.variants.push(v2);
+      return;
     }
     // манифест — курсивная строка про гостиничный бизнес
     if(raw.charAt(0)==='*' && raw.slice(-1)==='*' && /гостиничн/i.test(raw)){
