@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-07-fix24 -->
+<!DOCTYPE html><!-- v2026-09-08-fix26 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -444,7 +444,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 07.09 · fix24</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 08.09 · fix26</div>
   </div>
 </aside>
 
@@ -2763,11 +2763,16 @@ function letParse(md){
     var mSel = raw.match(/^\*{0,2}\s*Выбран\s*:?\*{0,2}\s*(.+)$/i);
     if(mSel){ r.chosen = letCleanTitle(mSel[1]); return; }
 
-    if(cur==='heads' && /^Приём\s*\d/i.test(raw)){ r.variants.push(letCleanTitle(raw)); return; }
-    if(cur==='themes' && /^[A-CА-В]\.\s/.test(raw)){
-      var v = letCleanTitle(raw);
-      if(v && r.variants.indexOf(v)<0) r.variants.push(v);
-      return;
+    // Варианты берём широко: копирайтер пишет их то «Приём N:», то «Тема A.»,
+    // то просто строкой в кавычках. Ловим любую строку с «…» в блоке заголовков.
+    if((cur==='heads' || cur==='themes') && raw){
+      var isVar = /^Приём\s*\d/i.test(raw) || /^[A-CА-В][.)]\s/.test(raw)
+               || /^\*{0,2}Тема\s*[A-CА-В1-3]?\s*[:.]/i.test(raw) || /«[^»]{8,}»/.test(raw);
+      if(isVar){
+        var v = letCleanTitle(raw);
+        if(v && v.length>8 && r.variants.indexOf(v)<0) r.variants.push(v);
+        return;
+      }
     }
     // манифест — курсивная строка про гостиничный бизнес
     if(raw.charAt(0)==='*' && raw.slice(-1)==='*' && /гостиничн/i.test(raw)){
@@ -2778,11 +2783,24 @@ function letParse(md){
   });
   flush();
   if(!r.chosen && r.variants.length) r.chosen = r.variants[0];
+  // Последняя линия обороны: если ни «Выбран», ни вариантов нет — ищем
+  // первую строку в кавычках во всём письме, иначе первую жирную строку.
+  if(!r.chosen){
+    var all = String(md||'');
+    var q = all.match(/«([^»]{10,120})»/);
+    if(q) r.chosen = q[1].trim();
+    if(!r.chosen){
+      var b = all.match(/^\*\*([^*\n]{10,120})\*\*\s*$/m);
+      if(b) r.chosen = b[1].trim();
+    }
+  }
+  if(r.chosen && r.variants.indexOf(r.chosen)<0) r.variants.unshift(r.chosen);
   // из тела вычищаем подпись, контакты и отписку — они рисуются отдельно
   r.body = r.body.split('\n').filter(function(l){
     var t=l.trim();
     return !/^Вероника\s+Войнова|^Основатель платформ|^\+7[\s\d]|^sales@|^https?:\/\/neuru\.ru$|Отписаться|unsubscribe/i.test(t);
   }).join('\n').replace(/\n{3,}/g,'\n\n').trim();
+  r.body = r.body.replace(/^\s*(\*{3,}|—{3,}|-{3,})\s*\n+/,'').trim();
   return r;
 }
 
@@ -2835,7 +2853,10 @@ function renderLetterEditor(text, key){
   // 1. Генератор заголовков — все варианты
   var vars = (d.variants.length ? d.variants : [d.chosen]).filter(Boolean);
   h += letBox('Генератор заголовков',
-    '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Нажмите на вариант — он станет заголовком письма.</div>'
+    (vars.length
+      ? '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Нажмите на вариант — он станет заголовком письма.</div>'
+      : '<div style="font-size:12px;color:#B45309;background:#FEF3C7;border-radius:8px;padding:9px 12px;margin-bottom:8px">'
+        +'В файле письма не нашлось вариантов заголовка. Впишите заголовок вручную в поле ниже.</div>')
     + vars.map(function(v,i){
         return '<div class="let-variant" onclick="letPickTitle('+i+')" style="cursor:pointer;border:1px solid '
           +((v===subject)?'var(--blue)':'var(--border)')+';background:'+((v===subject)?'var(--soft)':'transparent')
@@ -3897,6 +3918,10 @@ function imgStepHtml(){
     +'<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'
     +'<button onclick="imgGenPrompt(this)" style="background:var(--grad);color:#fff;border:none;border-radius:8px;'
     +'padding:8px 15px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">✨ Генерация</button>'
+    +'<button onclick="imgGenPicture(this)" style="background:#7C3AED;color:#fff;border:none;border-radius:8px;'
+    +'padding:8px 15px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:8px">🎨 Сгенерировать картинку</button>'
+    +'<button onclick="imgGenPicture(this)" style="background:#059669;color:#fff;border:none;border-radius:8px;'
+    +'padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;margin-left:8px">🖼 Сгенерировать картинку</button>'
     +'<button onclick="imgCopyPrompt()" style="background:none;border:1px solid var(--border);border-radius:8px;'
     +'padding:8px 15px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--text)">Скопировать</button>'
     +'</div></div>'
@@ -3956,6 +3981,114 @@ window.imgCopyPrompt = function(){
   var t = document.getElementById('img-prompt'); if(!t) return;
   navigator.clipboard.writeText(t.value).then(function(){ alert('Промпт скопирован'); });
 };
+// Генерация иллюстрации: промпт уходит в воркер, тот дергает YandexART
+// и возвращает готовый JPEG в base64. Ключи лежат только в воркере.
+var IMAGE_PROXY = String(CLAUDE_PROXY||'').replace(/\/api\/claude\/?$/, '/api/image');
+
+window.imgGenPicture = function(btn){
+  var ta = document.getElementById('img-prompt');
+  var st = document.getElementById('img-status');
+  var pr = ta ? ta.value.trim() : '';
+  if(pr.length < 10){ alert('Сначала напишите или сгенерируйте промпт для иллюстрации.'); return; }
+
+  var old = btn.textContent;
+  btn.textContent = 'Рисую… (до минуты)'; btn.disabled = true;
+  if(st) st.textContent = 'YandexART генерирует изображение, это занимает 10–40 секунд…';
+
+  var xhr = new XMLHttpRequest();
+  xhr.open('POST', IMAGE_PROXY, true);
+  xhr.setRequestHeader('Content-Type','application/json');
+  xhr.timeout = 120000;
+  xhr.onload = function(){
+    btn.textContent = old; btn.disabled = false;
+    var j = null; try{ j = JSON.parse(xhr.responseText); }catch(e){}
+    if(!j){
+      if(st) st.innerHTML = '<span style="color:#DC2626">Прокси вернул не JSON (код '+xhr.status+'): '
+        + imgEsc(String(xhr.responseText).slice(0,200)) + '</span>';
+      return;
+    }
+    if(!j.image){
+      if(st) st.innerHTML = '<span style="color:#DC2626">'+imgEsc(j.error || 'Изображение не получено')+'</span>';
+      return;
+    }
+    _imgStep.imgData = j.image;
+    _imgStep.imgExt  = 'jpg';
+    var p = document.getElementById('img-preview');
+    if(p) p.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Картинка сгенерирована YandexART:</div>'
+      + '<img src="data:image/jpeg;base64,'+j.image+'" style="max-width:100%;border-radius:12px;border:1px solid var(--border)">';
+    if(st) st.innerHTML = '<span style="color:#10B981">Готово. Можно отправлять в постинг.</span>';
+    window.imgUpdateReady();
+  };
+  xhr.onerror = function(){
+    btn.textContent = old; btn.disabled = false;
+    if(st) st.innerHTML = '<span style="color:#DC2626">Не удалось связаться с прокси: '+imgEsc(IMAGE_PROXY)+'</span>';
+  };
+  xhr.ontimeout = function(){
+    btn.textContent = old; btn.disabled = false;
+    if(st) st.innerHTML = '<span style="color:#DC2626">Генерация не уложилась в две минуты. Попробуйте ещё раз.</span>';
+  };
+  xhr.send(JSON.stringify({ prompt: pr, widthRatio: 16, heightRatio: 9 }));
+};
+
+// Генерация картинки через YandexART. Ключ лежит в воркере, не здесь:
+// дашборд открыт всем, класть в него ключи нельзя.
+var ART_PROXY = CLAUDE_PROXY.replace(/\/api\/claude\/?$/, '') + '/api/yandex-art';
+
+window.imgGenPicture = function(btn){
+  var ta = document.getElementById('img-prompt');
+  var st = document.getElementById('img-status');
+  if(!ta || ta.value.trim().length < 20){
+    alert('Сначала напишите или сгенерируйте промпт — по нему рисуется картинка.');
+    return;
+  }
+  var old = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Рисую…';
+  if(st) st.textContent = 'Отправляю запрос в YandexART…';
+
+  function fail(msg){
+    btn.disabled = false; btn.textContent = old;
+    if(st) st.innerHTML = '<span style="color:#DC2626">' + imgEsc(String(msg)) + '</span>';
+  }
+
+  var start = new XMLHttpRequest();
+  start.open('POST', ART_PROXY, true);
+  start.setRequestHeader('Content-Type','application/json');
+  start.onerror = function(){ fail('Сеть недоступна — проверьте адрес воркера: ' + ART_PROXY); };
+  start.onload = function(){
+    var d = null; try{ d = JSON.parse(start.responseText); }catch(e){}
+    if(!d) return fail('Воркер вернул не JSON (код ' + start.status + '): ' + start.responseText.slice(0,200));
+    if(d.error) return fail(d.error);
+    if(!d.id)  return fail('Воркер не вернул id операции');
+
+    var tries = 0;
+    (function poll(){
+      tries++;
+      if(tries > 40) return fail('Картинка не готова за две минуты — попробуйте ещё раз');
+      if(st) st.textContent = 'YandexART рисует… (' + (tries*3) + ' с)';
+      var op = new XMLHttpRequest();
+      op.open('GET', ART_PROXY + '/op?id=' + encodeURIComponent(d.id), true);
+      op.onerror = function(){ setTimeout(poll, 3000); };
+      op.onload = function(){
+        var r = null; try{ r = JSON.parse(op.responseText); }catch(e){}
+        if(!r) return fail('Воркер вернул не JSON при проверке статуса');
+        if(r.error) return fail(r.error);
+        if(!r.done) return setTimeout(poll, 3000);
+
+        _imgStep.imgData = r.image;
+        _imgStep.imgExt  = 'jpg';
+        var pv = document.getElementById('img-preview');
+        if(pv) pv.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Картинка сгенерирована YandexART:</div>'
+          + '<img src="data:image/jpeg;base64,' + r.image + '" style="max-width:100%;border-radius:12px;border:1px solid var(--border)">';
+        if(st) st.innerHTML = '<span style="color:#10B981">Картинка готова — можно отправлять в постинг.</span>';
+        btn.disabled = false; btn.textContent = old;
+        window.imgUpdateReady();
+      };
+      op.send();
+    })();
+  };
+  start.send(JSON.stringify({ prompt: ta.value.trim(), widthRatio: 16, heightRatio: 9 }));
+};
+
 window.imgGenPrompt = function(btn){
   var ta = document.getElementById('img-prompt'); if(!ta) return;
   var old = btn.textContent; btn.textContent = 'Генерирую…'; btn.disabled = true;
