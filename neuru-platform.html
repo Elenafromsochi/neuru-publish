@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-08-fix27 -->
+<!DOCTYPE html><!-- v2026-09-08-fix28 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -444,7 +444,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 08.09 · fix27</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 08.09 · fix28</div>
   </div>
 </aside>
 
@@ -2486,6 +2486,18 @@ function yaParse(md, subject){
       return;
     }
     if(/Вероника\s+Войнова|^\+7|^sales@|^https?:\/\/neuru\.ru$|Отписаться|unsubscribe/i.test(t)) return;
+    // Длинная ссылка внутри абзаца не переносится и распирает таблицу шире 600px —
+    // письмо обрезается по краю. Ссылку вырезаем, она уже ушла в кнопку.
+    if(url){
+      t = t.replace(/\[([^\]]*)\]\([^)]*\)/g,'$1')     // markdown-ссылка → текст
+           .replace(/https?:\/\/[^\s)>]+/g,'')            // голый адрес
+           .replace(/\s*[:：]\s*$/,'')
+           .replace(/\s{2,}/g,' ')
+           .replace(/^\s*Ссылка\s*[:：]?\s*/i,'')
+           .trim();
+      if(!res.cta && t.length>10 && t.length<160) res.cta = t;
+      if(t.length < 12) return;
+    }
     res.paras.push(t);
   }
   lines.forEach(function(l){
@@ -2565,7 +2577,7 @@ function buildYandexHtml(subject, preheader, bodyMd, badge){
     +'  body, table, td, a { -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; }\n'
     +'  table, td { mso-table-lspace:0pt; mso-table-rspace:0pt; }\n'
     +'  img { -ms-interpolation-mode:bicubic; border:0; outline:none; text-decoration:none; display:block; }\n'
-    +'  h1, p, td { word-break:normal; overflow-wrap:break-word; }\n'
+    +'  h1, p, td { word-break:break-word; overflow-wrap:anywhere; }\n'
     +'  body { margin:0 !important; padding:0 !important; width:100% !important; background-color:#F4F6FB; }\n'
     +'  a { color:#2D5BFF; }\n'
     +'  .u-link a { color:#9AA3B8 !important; text-decoration:underline; }\n'
