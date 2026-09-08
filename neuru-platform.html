@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-08-fix28 -->
+<!DOCTYPE html><!-- v2026-09-08-fix29 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -444,7 +444,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 08.09 · fix28</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 08.09 · fix29</div>
   </div>
 </aside>
 
@@ -2464,116 +2464,87 @@ function yaInline(t){
                 .replace(/\s—\s/g,' &#8212; ');
 }
 
-// Разбор письма на части, из которых собирается вёрстка
+// Разбор письма в ПОСЛЕДОВАТЕЛЬНОСТЬ блоков.
+// Раньше абзацы растаскивались по массивам и собирались в другом порядке —
+// текст переставлялся, а плашки повторяли то, что уже было выше.
 function yaParse(md, subject){
-  var res = { paras:[], quote:'', forward:'', link:'', cta:'', num:'', numTail:'' };
+  var blocks = [], link = '';
   var lines = String(md||'').replace(/\r\n?/g,'\n').split('\n');
   var buf = [], q = [];
-  function flush(){
-    if(!buf.length) return;
+
+  function pushQuote(){
+    var t = q.join(' ').trim(); q = [];
+    if(t) blocks.push({ t:'quote', text:t });
+  }
+  function pushPara(){
     var t = buf.join(' ').trim(); buf = [];
     if(!t) return;
-    var url = (t.match(/https?:\/\/[^\s)>]+/)||[])[0];
-    if(url && !res.link) res.link = url;
-    // строка про пересылку руководителю — уходит в тёмный блок
-    if(/перешлите|покажите\s+(это\s+)?руководител|директор подключит/i.test(t) && !res.forward){
-      res.forward = t.replace(/https?:\/\/\S+/g,'').replace(/[:：]\s*$/,'').trim();
-      return;
-    }
-    // строка, состоящая почти только из ссылки — это CTA
-    if(url && t.replace(url,'').replace(/[«»"'.,:;—–\-👉]/g,'').trim().length < 60){
-      if(!res.cta) res.cta = t.replace(url,'').replace(/[:：]\s*$/,'').replace(/👉/g,'').trim();
-      return;
-    }
-    if(/Вероника\s+Войнова|^\+7|^sales@|^https?:\/\/neuru\.ru$|Отписаться|unsubscribe/i.test(t)) return;
-    // Длинная ссылка внутри абзаца не переносится и распирает таблицу шире 600px —
-    // письмо обрезается по краю. Ссылку вырезаем, она уже ушла в кнопку.
+    var url = (t.match(/https?:\/\/[^\s)>\]]+/)||[])[0];
+    if(url && !link) link = url;
+
     if(url){
-      t = t.replace(/\[([^\]]*)\]\([^)]*\)/g,'$1')     // markdown-ссылка → текст
-           .replace(/https?:\/\/[^\s)>]+/g,'')            // голый адрес
-           .replace(/\s*[:：]\s*$/,'')
-           .replace(/\s{2,}/g,' ')
-           .replace(/^\s*Ссылка\s*[:：]?\s*/i,'')
-           .trim();
-      if(!res.cta && t.length>10 && t.length<160) res.cta = t;
-      if(t.length < 12) return;
+      // Ссылку из абзаца убираем: длинный адрес не переносится и рвёт вёрстку.
+      var label = t.replace(/\[([^\]]*)\]\([^)]*\)/g,'$1')
+                   .replace(/https?:\/\/[^\s)>\]]+/g,'')
+                   .replace(/^\s*Ссылка\s*[:：]?\s*/i,'')
+                   .replace(/[👉\s]*[:：]?\s*$/,'')
+                   .replace(/\s{2,}/g,' ').trim();
+      if(label.length > 8) blocks.push({ t:'p', text:label });
+      blocks.push({ t:'btn', url:url });
+      return;
     }
-    res.paras.push(t);
+    // Строка про пересылку руководителю — тёмная плашка на своём месте
+    if(/перешлите|покажите\s+(это\s+)?руководител|директор подключит/i.test(t)){
+      blocks.push({ t:'dark', text:t });
+      return;
+    }
+    blocks.push({ t:'p', text:t });
   }
+
   lines.forEach(function(l){
     var t = l.trim();
-    if(/^>\s?/.test(t)){ flush(); q.push(t.replace(/^>\s?/,'')); return; }
-    if(q.length && !/^>/.test(t)){ res.quote = res.quote || q.join(' '); q = []; }
-    if(/^-{3,}$/.test(t) || /^#{1,6}\s/.test(t) || /^\*[^*]+\*$/.test(t)){ flush(); return; }
-    if(!t){ flush(); return; }
+    if(/^>\s?/.test(t)){ pushPara(); q.push(t.replace(/^>\s?/,'')); return; }
+    if(q.length && !/^>/.test(t)) pushQuote();
+    if(/^-{3,}$/.test(t) || /^\*{3,}$/.test(t)){ pushPara(); return; }
+    if(/^#{1,6}\s/.test(t)){ pushPara(); return; }
+    if(!t){ pushPara(); return; }
+    if(/Вероника\s+Войнова|^Основатель платформ|^\+7[\s\d]|^sales@|^https?:\/\/neuru\.ru$|Отписаться|unsubscribe/i.test(t)) return;
+    if(/^\*[^*].*гостиничн.*\*$/i.test(t)) return;   // манифест — отдельным блоком
     buf.push(t);
   });
-  flush();
-  if(q.length && !res.quote) res.quote = q.join(' ');
+  pushPara(); if(q.length) pushQuote();
 
-  // крупная цифра: ищем в теме и первых абзацах
-  var src = subject + ' ' + res.paras.slice(0,3).join(' ');
-  var mn = src.match(/(\d+[\d\s.,–-]*)\s*(секунд\w*|минут\w*|часов|%|млрд|млн|дн\w+)/i);
-  if(mn){
-    res.num = (mn[1].trim() + ' ' + mn[2]).replace(/\s+/g,'\u00A0').replace(/-/g,'&#8211;');
-    res.numTail = 'по данным письма';
-  }
-  return res;
-}
+  // Убираем подряд идущие одинаковые абзацы (копирайтер иногда повторяет CTA)
+  var seen = {}, uniq = [];
+  blocks.forEach(function(b){
+    if(b.t === 'p'){
+      var k = b.text.toLowerCase().replace(/[^а-яa-z0-9]/gi,'').slice(0,60);
+      if(seen[k]) return;
+      seen[k] = 1;
+    }
+    uniq.push(b);
+  });
 
-function yaCard(text){
-  return '<tr><td style="padding:0 20px 8px 20px;">'
-    +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#FFFFFF; border:1px solid #E6EAF5; border-radius:14px;">'
-    +'<tr><td style="padding:11px 16px; font-family:Arial,Helvetica,sans-serif; font-size:14px; line-height:20px; color:#3A4152;">'
-    + yaInline(text) +'</td></tr></table></td></tr>';
-}
-function yaChip(t){
-  return '<div style="display:inline-block; width:100%; max-width:172px; min-width:120px; vertical-align:top; padding:0 8px 8px 0; box-sizing:border-box; -webkit-box-sizing:border-box;">'
-    +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#FFFFFF; border:1px solid #DCE4FF; border-radius:14px;">'
-    +'<tr><td align="center" style="padding:14px 10px; font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#3A4152; white-space:nowrap;">'+yaNb(t)+'</td></tr>'
-    +'</table></div>';
-}
-function yaStat(num, cap){
-  return '<div style="display:inline-block; width:100%; max-width:172px; min-width:150px; vertical-align:top; padding:0 8px 8px 0; box-sizing:border-box; -webkit-box-sizing:border-box;">'
-    +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F7F9FF; border:1px solid #DCE4FF; border-radius:16px;">'
-    +'<tr><td style="padding:18px 16px;">'
-    +'<div style="font-family:\'Helvetica Neue\',Arial,Helvetica,sans-serif; font-size:28px; line-height:34px; font-weight:bold; color:#2D5BFF; white-space:nowrap;">'+num+'</div>'
-    +'<div style="font-family:Arial,Helvetica,sans-serif; font-size:13px; line-height:19px; color:#7C86A0; padding-top:6px;">'+yaNb(cap)+'</div>'
-    +'</td></tr></table></div>';
-}
-function yaBtn(url, label, outline){
-  var u = yaEsc(url);
-  var mso = '<!--[if mso]>\n<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="'+u+'" style="height:54px;v-text-anchor:middle;width:300px;" arcsize="25%" '
-    + (outline ? 'strokecolor="#2D5BFF" fillcolor="#FFFFFF"' : 'stroke="f" fillcolor="#2D5BFF"') + '>\n'
-    + '<w:anchorlock/><center style="color:'+(outline?'#2D5BFF':'#FFFFFF')+';font-family:Arial,sans-serif;font-size:16px;font-weight:bold;">'+yaEsc(label)+'</center>\n'
-    + '</v:roundrect>\n<![endif]-->\n';
-  return '<tr><td class="px" align="left" style="padding:0 28px '+(outline?'36':'32')+'px 28px;">\n'+mso
-    +'<!--[if !mso]><!-- -->\n'
-    +'<table role="presentation" class="btn" cellpadding="0" cellspacing="0" border="0"><tr>'
-    +'<td align="center" bgcolor="'+(outline?'#FFFFFF':'#2D5BFF')+'" style="'
-    +(outline?'border:2px solid #2D5BFF; border-radius:14px;':'border-radius:14px; box-shadow:0 6px 20px rgba(45,91,255,0.35);')+'">'
-    +'<a href="'+u+'" target="_blank" style="display:inline-block; padding:'+(outline?'15px 30px':'17px 32px')
-    +'; font-family:Arial,Helvetica,sans-serif; font-size:16px; line-height:20px; font-weight:bold; color:'
-    +(outline?'#2D5BFF':'#FFFFFF')+'; text-decoration:none; border-radius:14px;">'+yaNb(label)+'</a>'
-    +'</td></tr></table>\n<!--<![endif]-->\n</td></tr>\n';
+  // Крупная цифра — только если она есть в теме
+  var num = '', mn = String(subject||'').match(/(\d[\d\s.,]*)\s*(секунд\w*|минут\w*|часов|%|₽|руб\w*)/i);
+  if(mn) num = (mn[1].trim()+'\u00A0'+mn[2]).replace(/\s+/g,'\u00A0');
+
+  return { blocks: uniq, link: link, num: num };
 }
 
 function buildYandexHtml(subject, preheader, bodyMd, badge){
   var d = yaParse(bodyMd, subject);
-  var link = d.link || 'https://neuru.ru/ai-porter';
-  var P = function(t, pad){ return '<tr><td class="px" style="padding:'+pad+'; font-family:Arial,Helvetica,sans-serif; font-size:16px; line-height:27px; color:#3A4152;">'
-      +'<p style="margin:0;">'+yaInline(t)+'</p></td></tr>'; };
-
   var h = '';
-  h += '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">\n';
-  h += '<html xmlns="http://www.w3.org/1999/xhtml" lang="ru">\n<head>\n';
-  h += '<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />\n';
-  h += '<meta name="viewport" content="width=device-width, initial-scale=1" />\n';
-  h += '<meta name="format-detection" content="telephone=no" />\n';
-  h += '<meta name="x-apple-disable-message-reformatting" />\n';
-  h += '<title>'+yaEsc(subject)+'</title>\n';
-  h += '<!--[if mso]>\n<xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml>\n<![endif]-->\n';
-  h += '<style type="text/css">\n'
+
+  h += '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">\n'
+    +'<html xmlns="http://www.w3.org/1999/xhtml" lang="ru">\n<head>\n'
+    +'<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />\n'
+    +'<meta name="viewport" content="width=device-width, initial-scale=1" />\n'
+    +'<meta name="format-detection" content="telephone=no" />\n'
+    +'<meta name="x-apple-disable-message-reformatting" />\n'
+    +'<title>'+yaEsc(subject)+'</title>\n'
+    +'<!--[if mso]>\n<xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml>\n<![endif]-->\n'
+    +'<style type="text/css">\n'
     +'  body, table, td, a { -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; }\n'
     +'  table, td { mso-table-lspace:0pt; mso-table-rspace:0pt; }\n'
     +'  img { -ms-interpolation-mode:bicubic; border:0; outline:none; text-decoration:none; display:block; }\n'
@@ -2586,124 +2557,105 @@ function buildYandexHtml(subject, preheader, bodyMd, badge){
     +'    .h1 { font-size:25px !important; line-height:32px !important; }\n'
     +'    .num { font-size:34px !important; }\n'
     +'    .btn a { display:block !important; }\n'
-    +'  }\n</style>\n</head>\n\n';
-  h += '<body style="margin:0; padding:0; background-color:#F4F6FB;">\n\n';
-  h += '<div style="display:none; font-size:1px; color:#F4F6FB; line-height:1px; max-height:0px; max-width:0px; opacity:0; overflow:hidden;">\n  '
-    + yaNb(preheader) + '\n  '
-    + new Array(17).join('&#847;&zwnj;&nbsp;') + '\n</div>\n\n';
-  h += '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F4F6FB;">\n  <tr>\n    <td align="center" style="padding:26px 12px 34px 12px;">\n';
-  h += '      <!--[if mso]><table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->\n\n';
+    +'  }\n</style>\n</head>\n\n'
+    +'<body style="margin:0; padding:0; background-color:#F4F6FB;">\n\n'
+    +'<div style="display:none; font-size:1px; color:#F4F6FB; line-height:1px; max-height:0px; max-width:0px; opacity:0; overflow:hidden;">'
+    + yaNb(preheader) +'</div>\n\n'
+    +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F4F6FB;">\n'
+    +'  <tr><td align="center" style="padding:26px 12px 34px 12px;">\n'
+    +'  <!--[if mso]><table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->\n\n';
 
   // ШАПКА
-  h += '      <!-- ШАПКА -->\n'
-    +'      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%; max-width:600px;">\n'
-    +'        <tr><td class="px" style="padding:0 8px 16px 8px;">\n'
-    +'          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>\n'
-    +'            <td align="left" style="font-family:Arial,Helvetica,sans-serif; font-size:15px; font-weight:bold; letter-spacing:2px; color:#1E2230;">НЭЙРУ</td>\n'
-    +'            <td align="right" style="font-family:Arial,Helvetica,sans-serif; font-size:12px; color:#7C86A0;">Платформа ИИ&#8209;сотрудников</td>\n'
-    +'          </tr></table>\n        </td></tr>\n      </table>\n\n';
+  h += '  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%; max-width:600px;">\n'
+    +'    <tr><td class="px" style="padding:0 8px 16px 8px;">\n'
+    +'      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>\n'
+    +'        <td align="left" style="font-family:Arial,Helvetica,sans-serif; font-size:15px; font-weight:bold; letter-spacing:2px; color:#1E2230;">НЭЙРУ</td>\n'
+    +'        <td align="right" style="font-family:Arial,Helvetica,sans-serif; font-size:12px; color:#7C86A0;">Платформа ИИ&#8209;сотрудников</td>\n'
+    +'      </tr></table>\n    </td></tr>\n  </table>\n\n';
 
-  // ГЛАВНАЯ КАРТОЧКА
-  h += '      <!-- ГЛАВНАЯ КАРТОЧКА -->\n'
-    +'      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%; max-width:600px; background-color:#FFFFFF; border-radius:22px; overflow:hidden; border:1px solid #E6EAF5;">\n\n';
-  h += '        <tr><td class="px" style="padding:40px 28px 0 28px;">\n'
-    +'          <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>\n'
-    +'            <td style="background-color:#EEF2FF; border-radius:20px; padding:7px 15px; font-family:Arial,Helvetica,sans-serif; font-size:12px; letter-spacing:0.5px; color:#2D5BFF;">'+yaNb(badge||'НЭЙРУ · ИИ-портье')+'</td>\n'
-    +'          </tr></table>\n        </td></tr>\n';
-  h += '        <tr><td class="px" style="padding:22px 28px 0 28px;">\n'
-    +'          <h1 class="h1" style="margin:0; font-family:\'Helvetica Neue\',Arial,Helvetica,sans-serif; font-size:31px; line-height:39px; font-weight:bold; color:#1E2230; letter-spacing:-0.5px;">'+yaNb(subject)+'</h1>\n'
-    +'        </td></tr>\n';
+  // КАРТОЧКА
+  h += '  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%; max-width:600px; background-color:#FFFFFF; border-radius:22px; overflow:hidden; border:1px solid #E6EAF5;">\n';
+  h += '    <tr><td class="px" style="padding:40px 28px 0 28px;">\n'
+    +'      <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>\n'
+    +'        <td style="background-color:#EEF2FF; border-radius:20px; padding:7px 15px; font-family:Arial,Helvetica,sans-serif; font-size:12px; letter-spacing:0.5px; color:#2D5BFF;">'+yaNb(badge||'НЭЙРУ · ИИ-портье')+'</td>\n'
+    +'      </tr></table>\n    </td></tr>\n';
+  h += '    <tr><td class="px" style="padding:22px 28px 0 28px;">\n'
+    +'      <h1 class="h1" style="margin:0; font-family:\'Helvetica Neue\',Arial,Helvetica,sans-serif; font-size:31px; line-height:39px; font-weight:bold; color:#1E2230; letter-spacing:-0.5px;">'+yaNb(subject)+'</h1>\n'
+    +'    </td></tr>\n';
   if(d.num){
-    h += '        <tr><td class="px" style="padding:16px 28px 0 28px;">\n'
-      +'          <span class="num" style="font-family:\'Helvetica Neue\',Arial,Helvetica,sans-serif; font-size:40px; line-height:48px; font-weight:bold; color:#2D5BFF; text-shadow:0 0 18px rgba(45,91,255,0.35); white-space:nowrap;">'+d.num+'</span>\n'
-      +'          <span style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#7C86A0;">&nbsp;'+yaNb(d.numTail)+'</span>\n'
-      +'        </td></tr>\n';
+    h += '    <tr><td class="px" style="padding:16px 28px 0 28px;">\n'
+      +'      <span class="num" style="font-family:\'Helvetica Neue\',Arial,Helvetica,sans-serif; font-size:40px; line-height:48px; font-weight:bold; color:#2D5BFF; white-space:nowrap;">'+d.num+'</span>\n'
+      +'    </td></tr>\n';
   }
 
-  // Панель смены — первые три абзаца короткими карточками
-  var panel = d.paras.slice(0,3).filter(function(t){ return t.length < 220; });
-  if(panel.length){
-    h += '\n        <!-- Панель смены -->\n        <tr><td class="px" style="padding:28px 28px 0 28px;">\n'
-      +'          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F7F9FF; border-radius:16px; border:1px solid #E6EAF5;">\n'
-      +'            <tr><td style="padding:20px 20px 8px 20px;">'
-      +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#FFFFFF; border:1px solid #E6EAF5; border-radius:14px;">'
-      +'<tr><td style="padding:11px 16px; font-family:Arial,Helvetica,sans-serif; font-size:14px; line-height:20px; color:#3A4152;">'+yaInline(panel[0])+'</td></tr></table></td></tr>\n';
-    panel.slice(1).forEach(function(t){ h += '            '+yaCard(t)+'\n'; });
-    h += '            <tr><td style="padding:0 20px 20px 20px;">'
-      +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#2D5BFF; border-radius:14px;">'
-      +'<tr><td style="padding:11px 16px; font-family:Arial,Helvetica,sans-serif; font-size:14px; line-height:20px; color:#FFFFFF;">'
-      +'ИИ&#8209;портье &#8212; принял звонок и ответил в чат одновременно. Стойка ваша.</td></tr></table></td></tr>\n'
-      +'          </table>\n        </td></tr>\n';
+  // ТЕЛО — строго в авторском порядке
+  var btnCount = 0;
+  d.blocks.forEach(function(b){
+    if(b.t === 'p'){
+      h += '    <tr><td class="px" style="padding:22px 28px 0 28px; font-family:Arial,Helvetica,sans-serif; font-size:16px; line-height:27px; color:#3A4152;">'
+        +'<p style="margin:0;">'+yaInline(b.text)+'</p></td></tr>\n';
+    } else if(b.t === 'quote'){
+      h += '    <tr><td class="px" style="padding:22px 28px 0 28px;">\n'
+        +'      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F3F0FF; border-radius:16px; border:1px solid #E4DEFF;">\n'
+        +'        <tr><td style="padding:20px 22px; font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:25px; color:#3A4152;">'+yaInline(b.text)+'</td></tr>\n'
+        +'      </table>\n    </td></tr>\n';
+    } else if(b.t === 'dark'){
+      h += '    <tr><td class="px" style="padding:26px 28px 0 28px;">\n'
+        +'      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1E2230; border-radius:18px;">\n'
+        +'        <tr><td style="padding:26px; font-family:Arial,Helvetica,sans-serif; font-size:16px; line-height:27px; color:#C8CFE0;">'
+        +'<p style="margin:0;">'+yaInline(b.text)+'</p></td></tr>\n'
+        +'      </table>\n    </td></tr>\n';
+    } else if(b.t === 'btn'){
+      btnCount++;
+      var outline = btnCount > 1;
+      var u = yaEsc(b.url), label = outline ? 'Открыть страницу ИИ-портье' : 'Посмотреть демонстрацию';
+      h += '    <tr><td class="px" align="left" style="padding:22px 28px 0 28px;">\n'
+        +'<!--[if mso]>\n<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="'+u+'" style="height:54px;v-text-anchor:middle;width:300px;" arcsize="25%" '
+        +(outline?'strokecolor="#2D5BFF" fillcolor="#FFFFFF"':'stroke="f" fillcolor="#2D5BFF"')+'>\n'
+        +'<w:anchorlock/><center style="color:'+(outline?'#2D5BFF':'#FFFFFF')+';font-family:Arial,sans-serif;font-size:16px;font-weight:bold;">'+yaEsc(label)+'</center>\n</v:roundrect>\n<![endif]-->\n'
+        +'<!--[if !mso]><!-- -->\n'
+        +'<table role="presentation" class="btn" cellpadding="0" cellspacing="0" border="0"><tr>'
+        +'<td align="center" bgcolor="'+(outline?'#FFFFFF':'#2D5BFF')+'" style="'
+        +(outline?'border:2px solid #2D5BFF; border-radius:14px;':'border-radius:14px;')+'">'
+        +'<a href="'+u+'" target="_blank" style="display:inline-block; padding:'+(outline?'15px 30px':'17px 32px')
+        +'; font-family:Arial,Helvetica,sans-serif; font-size:16px; line-height:20px; font-weight:bold; color:'
+        +(outline?'#2D5BFF':'#FFFFFF')+'; text-decoration:none; border-radius:14px;">'+yaNb(label)+'</a>'
+        +'</td></tr></table>\n<!--<![endif]-->\n    </td></tr>\n';
+    }
+  });
+
+  // Интеграции — только если письмо их упоминает
+  if(/TravelLine|Bnovo|1С:Отель|1C:Отель/i.test(bodyMd)){
+    h += '    <tr><td class="px" style="padding:26px 28px 0 28px;"><div style="font-size:0; text-align:left;">\n';
+    ['TravelLine','Bnovo','1С:Отель'].forEach(function(c){
+      h += '      <div style="display:inline-block; width:100%; max-width:172px; min-width:120px; vertical-align:top; padding:0 8px 8px 0; box-sizing:border-box;">'
+        +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#FFFFFF; border:1px solid #DCE4FF; border-radius:14px;">'
+        +'<tr><td align="center" style="padding:14px 10px; font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#3A4152; white-space:nowrap;">'+yaNb(c)+'</td></tr>'
+        +'</table></div>\n';
+    });
+    h += '    </div></td></tr>\n';
   }
 
-  // Остальные абзацы
-  var rest = d.paras.slice(panel.length);
-  if(rest.length){
-    h += '\n        <tr><td class="px" style="padding:30px 28px 0 28px; font-family:Arial,Helvetica,sans-serif; font-size:16px; line-height:27px; color:#3A4152;">\n';
-    rest.forEach(function(t,i){ h += '          <p style="margin:0 0 '+(i===rest.length-1?'24':'16')+'px 0;">'+yaInline(t)+'</p>\n'; });
-    h += '        </td></tr>\n';
-  }
-
-  h += '\n        <!-- Кнопка 1 -->\n' + yaBtn(link, 'Посмотреть демонстрацию', false);
-
-  // Цитата
-  if(d.quote){
-    h += '        <tr><td class="px" style="padding:0 28px 24px 28px;">\n'
-      +'          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F3F0FF; border-radius:16px; border:1px solid #E4DEFF;">\n'
-      +'            <tr><td style="padding:20px 22px; font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:25px; color:#3A4152;">'+yaInline(d.quote)+'</td></tr>\n'
-      +'          </table>\n        </td></tr>\n';
-  }
-
-  // Продукт + интеграции
-  h += '\n        <!-- Продукт -->\n'
-    +'        <tr><td class="px" style="padding:20px 28px 10px 28px; font-family:\'Helvetica Neue\',Arial,Helvetica,sans-serif; font-size:22px; line-height:30px; font-weight:bold; color:#1E2230;">Что делает ИИ&#8209;портье</td></tr>\n'
-    + P('Отвечает на звонки и сообщения одновременно: называет цену, проверяет наличие, бронирует. Однотипные вопросы про заезд, Wi-Fi и допкровать закрывает сам. Ночь и пиковые часы — тоже.', '6px 28px 0 28px')
-    +'        <tr><td class="px" style="padding:10px 28px 0 28px;"><div style="font-size:0; text-align:left;">\n'
-    +'          <!--[if mso]><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td width="33%" valign="top" style="padding-right:8px;"><![endif]-->\n'
-    +'          '+yaChip('TravelLine')+'\n'
-    +'          <!--[if mso]></td><td width="33%" valign="top" style="padding-right:8px;"><![endif]-->\n'
-    +'          '+yaChip('Bnovo')+'\n'
-    +'          <!--[if mso]></td><td width="33%" valign="top"><![endif]-->\n'
-    +'          '+yaChip('1С:Отель')+'\n'
-    +'          <!--[if mso]></td></tr></table><![endif]-->\n'
-    +'        </div></td></tr>\n';
-
-  // Блок «Ресепшену»
-  if(d.forward){
-    h += '\n        <!-- Ресепшену -->\n        <tr><td class="px" style="padding:32px 28px 0 28px;">\n'
-      +'          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1E2230; border-radius:18px;">\n'
-      +'            <tr><td style="padding:28px 26px; font-family:Arial,Helvetica,sans-serif; font-size:16px; line-height:27px; color:#C8CFE0;">\n'
-      +'              <p style="margin:0 0 16px 0; font-size:19px; line-height:28px; font-weight:bold; color:#8FA8FF;">Если вы на ресепшене &#8212; покажите это руководителю.</p>\n'
-      +'              <p style="margin:0;">'+yaInline(d.forward)+'</p>\n'
-      +'            </td></tr>\n          </table>\n        </td></tr>\n';
-  }
-
-  // Кнопка 2
-  h += '\n        <!-- Кнопка 2 -->\n'
-    + P(d.cta || 'Посмотрите, как ИИ-портье отвечает гостям — пока вы заняты гостями на стойке.', '28px 28px 12px 28px')
-    + yaBtn(link, 'Открыть страницу ИИ-портье', true);
-
-  // Подпись
-  h += '        <!-- Подпись -->\n        <tr><td class="px" style="padding:0 28px 40px 28px;">\n'
-    +'          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F7F9FF; border:1px solid #E6EAF5; border-radius:18px;">\n'
-    +'            <tr><td style="padding:22px;">\n'
-    +'              <img src="'+YA_SIG+'" width="504" alt="Вероника Войнова выступает на международном туристическом форуме SIFT" style="display:block; width:100%; max-width:504px; height:auto; border-radius:14px; border:1px solid #DCE4FF;" />\n'
-    +'              <div style="font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:18px; color:#9AA3B8; padding:12px 0 18px 0;">Международный туристический форум SIFT, Сочи</div>\n'
-    +'              <div style="font-family:\'Helvetica Neue\',Arial,Helvetica,sans-serif; font-size:19px; line-height:26px; font-weight:bold; color:#1E2230;">Вероника Войнова</div>\n'
-    +'              <div style="font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:24px; color:#7C86A0; padding-bottom:10px;">Основатель платформы ИИ&#8209;сотрудников НЭЙРУ</div>\n'
-    +'              <div style="font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:24px;"><a href="tel:+79628847891" style="color:#2D5BFF; text-decoration:none;">+7&nbsp;962&nbsp;884&nbsp;78&nbsp;91</a></div>\n'
-    +'              <div style="font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:24px;"><a href="mailto:sales@neuru.ru" style="color:#2D5BFF;">sales@neuru.ru</a></div>\n'
-    +'              <div style="font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:24px;"><a href="https://neuru.ru" target="_blank" style="color:#2D5BFF;">neuru.ru</a></div>\n'
-    +'            </td></tr>\n          </table>\n        </td></tr>\n\n      </table>\n\n';
+  // ПОДПИСЬ
+  h += '    <tr><td class="px" style="padding:32px 28px 40px 28px;">\n'
+    +'      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F7F9FF; border:1px solid #E6EAF5; border-radius:18px;">\n'
+    +'        <tr><td style="padding:22px;">\n'
+    +'          <img src="'+YA_SIG+'" width="504" alt="Вероника Войнова на форуме SIFT" style="display:block; width:100%; max-width:504px; height:auto; border-radius:14px; border:1px solid #DCE4FF;" />\n'
+    +'          <div style="font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:18px; color:#9AA3B8; padding:12px 0 18px 0;">Международный туристический форум SIFT, Сочи</div>\n'
+    +'          <div style="font-family:\'Helvetica Neue\',Arial,Helvetica,sans-serif; font-size:19px; line-height:26px; font-weight:bold; color:#1E2230;">Вероника Войнова</div>\n'
+    +'          <div style="font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:24px; color:#7C86A0; padding-bottom:10px;">Основатель платформы ИИ&#8209;сотрудников НЭЙРУ</div>\n'
+    +'          <div style="font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:24px;"><a href="tel:+79628847891" style="color:#2D5BFF; text-decoration:none;">+7&nbsp;962&nbsp;884&nbsp;78&nbsp;91</a></div>\n'
+    +'          <div style="font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:24px;"><a href="mailto:sales@neuru.ru" style="color:#2D5BFF;">sales@neuru.ru</a></div>\n'
+    +'          <div style="font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:24px;"><a href="https://neuru.ru" target="_blank" style="color:#2D5BFF;">neuru.ru</a></div>\n'
+    +'        </td></tr>\n      </table>\n    </td></tr>\n\n  </table>\n\n';
 
   // ФУТЕР
-  h += '      <!-- ФУТЕР -->\n'
-    +'      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%; max-width:600px;">\n'
-    +'        <tr><td class="px" align="center" style="padding:22px 28px 6px 28px; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:20px; color:#9AA3B8;">\n'
-    +'          Вы получили это письмо, потому что ваш адрес есть в базе деловых контактов гостиничного рынка НЭЙРУ.\n        </td></tr>\n'
-    +'        <tr><td class="px u-link" align="center" style="padding:0 28px 24px 28px; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:20px; color:#9AA3B8;">\n'
-    +'          <a href="{{unsubscribe_link}}" target="_blank">Отказаться от рассылки</a>\n        </td></tr>\n      </table>\n\n';
-  h += '      <!--[if mso]></td></tr></table><![endif]-->\n    </td>\n  </tr>\n</table>\n\n</body>\n</html>\n';
+  h += '  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%; max-width:600px;">\n'
+    +'    <tr><td class="px" align="center" style="padding:22px 28px 6px 28px; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:20px; color:#9AA3B8;">\n'
+    +'      Вы получили это письмо, потому что ваш адрес есть в базе деловых контактов гостиничного рынка НЭЙРУ.\n    </td></tr>\n'
+    +'    <tr><td class="px u-link" align="center" style="padding:0 28px 24px 28px; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:20px; color:#9AA3B8;">\n'
+    +'      <a href="{{unsubscribe_link}}" target="_blank">Отказаться от рассылки</a>\n    </td></tr>\n  </table>\n\n'
+    +'  <!--[if mso]></td></tr></table><![endif]-->\n  </td></tr>\n</table>\n\n</body>\n</html>\n';
   return h;
 }
 
