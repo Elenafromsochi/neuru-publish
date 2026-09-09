@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-08-fix29 -->
+<!DOCTYPE html><!-- v2026-09-09-fix30 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -278,6 +278,8 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .pub-cal-day.has-data:hover{background:var(--grad);color:#fff;border-color:transparent}
 .pub-cal-day.selected{background:var(--grad);color:#fff;border-color:transparent}
 .pub-cal-day.empty{cursor:default;opacity:.3;pointer-events:none}
+.pub-cal-day.today{border:2px solid var(--blue);color:var(--blue)}
+.pub-cal-day.today.selected{border-color:transparent;color:#fff}
 .pub-cal-dot{width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.7}
 .pcpy-pub-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px 22px;margin-bottom:14px}
 .pcpy-pub-card[data-hidden="1"]{display:none}
@@ -444,7 +446,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 08.09 · fix29</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 09.09 · fix30</div>
   </div>
 </aside>
 
@@ -1953,12 +1955,15 @@ function ghHeaders(){
 }
 
 function ghFetch(path){
-  var url = 'https://api.github.com/repos/'+REPO+'/contents/'+path+'?ref='+BRANCH;
+  // fix30: &_=timestamp + no-cache — иначе Safari и GitHub API отдают
+  // старую версию файла и в панели видно вчерашнее содержимое.
+  var url = 'https://api.github.com/repos/'+REPO+'/contents/'+path+'?ref='+BRANCH+'&_='+Date.now();
   var headers = ghHeaders();
   return new Promise(function(resolve, reject){
     var xhr = new XMLHttpRequest();
     xhr.open('GET', url, true);
     for(var h in headers) xhr.setRequestHeader(h, headers[h]);
+    xhr.setRequestHeader('Cache-Control','no-cache');
     xhr.onload = function(){
       if(xhr.status === 404){ reject(new Error('not_found')); return; }
       if(xhr.status === 401){ reject(new Error('auth')); return; }
@@ -2123,8 +2128,30 @@ function showSec(id, el){
   if(id==='analytics'){ loadAnWeekList(); }
 }
 
+/* ══ МОСКОВСКОЕ ВРЕМЯ — ЕДИНЫЙ ИСТОЧНИК ДАТ (fix30) ══
+   Все календари и имена файлов считаются по Europe/Moscow,
+   независимо от часового пояса компьютера. */
+function mskParts(){
+  try{
+    var p={};
+    new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit'})
+      .formatToParts(new Date()).forEach(function(x){ p[x.type]=x.value; });
+    if(p.year&&p.month&&p.day) return {y:+p.year,m:+p.month,d:+p.day};
+  }catch(e){}
+  var n=new Date(), msk=new Date(n.getTime()+n.getTimezoneOffset()*60000+10800000);
+  return {y:msk.getFullYear(),m:msk.getMonth()+1,d:msk.getDate()};
+}
+/* Локальный Date, у которого Y/M/D совпадают с московскими */
+function mskDate(){ var p=mskParts(); return new Date(p.y,p.m-1,p.d); }
+function mskISO(){ var p=mskParts(); return p.y+'-'+String(p.m).padStart(2,'0')+'-'+String(p.d).padStart(2,'0'); }
+function mskDMY(){ var p=mskParts(); return String(p.d).padStart(2,'0')+'.'+String(p.m).padStart(2,'0')+'.'+p.y; }
+function mskStamp(){
+  try{ return new Date().toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})+' МСК'; }
+  catch(e){ return new Date().toLocaleString('ru'); }
+}
 var NOW=new Date();
-var CY=NOW.getFullYear(), CM=NOW.getMonth()+1, CD=NOW.getDate();
+var _mskInit=mskParts();
+var CY=_mskInit.y, CM=_mskInit.m, CD=_mskInit.d;
 var MON_NOM=['','\u042f\u043d\u0432\u0430\u0440\u044c','\u0424\u0435\u0432\u0440\u0430\u043b\u044c','\u041c\u0430\u0440\u0442','\u0410\u043f\u0440\u0435\u043b\u044c','\u041c\u0430\u0439','\u0418\u044e\u043d\u044c','\u0418\u044e\u043b\u044c','\u0410\u0432\u0433\u0443\u0441\u0442','\u0421\u0435\u043d\u0442\u044f\u0431\u0440\u044c','\u041e\u043a\u0442\u044f\u0431\u0440\u044c','\u041d\u043e\u044f\u0431\u0440\u044c','\u0414\u0435\u043a\u0430\u0431\u0440\u044c'];
 var MON_GEN=['','\u044f\u043d\u0432\u0430\u0440\u044f','\u0444\u0435\u0432\u0440\u0430\u043b\u044f','\u043c\u0430\u0440\u0442\u0430','\u0430\u043f\u0440\u0435\u043b\u044f','\u043c\u0430\u044f','\u0438\u044e\u043d\u044f','\u0438\u044e\u043b\u044f','\u0430\u0432\u0433\u0443\u0441\u0442\u0430','\u0441\u0435\u043d\u0442\u044f\u0431\u0440\u044f','\u043e\u043a\u0442\u044f\u0431\u0440\u044f','\u043d\u043e\u044f\u0431\u0440\u044f','\u0434\u0435\u043a\u0430\u0431\u0440\u044f'];
 var M1=CM===1?12:CM-1, Y1=CM===1?CY-1:CY, M2=CM, Y2=CY;
@@ -3227,13 +3254,13 @@ function sendToInterview(news){ pubSelectedNews=news; showSec('pub-interview',do
 function sendToStrategy(news){
   pubSelectedNews = news;
   if(!getToken()){ alert('Добавьте GitHub токен в левом меню'); return; }
-  var now = new Date();
+  var now = mskDate();               // fix30: неделя считается по Москве
   var day = now.getDay() || 7;
   var mon = new Date(now); mon.setDate(now.getDate() - day + 1); mon.setHours(0,0,0,0);
   var sun = new Date(mon); sun.setDate(mon.getDate() + 6);
   function fd(d){ return String(d.getDate()).padStart(2,'0')+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+d.getFullYear(); }
   var folder = fd(mon)+'-'+fd(sun);
-  var datePrefix = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+  var datePrefix = mskISO();
   var slug = news.title.toLowerCase()
     .replace(/ё/g,'e').replace(/[^a-zа-я0-9\s]/gi,'')
     .trim().replace(/\s+/g,'-').substring(0,60);
@@ -3322,12 +3349,37 @@ function pubFetchWithFallback(pathNew, pathOld, cb){
   });
 }
 
-// Загрузка файла через Raw URL (быстро, без авторизации для публичных репо)
+// Загрузка файла из neuru-publish.
+// fix30: raw.githubusercontent отдаётся через CDN и кэшируется — из-за этого
+// панель показывала старую версию публикаций, пока на GitHub лежала новая.
+// Основной путь теперь GitHub API (всегда актуальный коммит main),
+// raw остаётся запасным вариантом, если API недоступен или лимит исчерпан.
 function pubFetchRaw(path, cb){
-  var url = 'https://raw.githubusercontent.com/'+PUB_REPO+'/main/'+path;
+  var enc = path.split('/').map(encodeURIComponent).join('/');
+  var apiUrl = 'https://api.github.com/repos/'+PUB_REPO+'/contents/'+enc+'?ref=main&_='+Date.now();
+  var tok = getToken();
+  var x1 = new XMLHttpRequest();
+  x1.open('GET', apiUrl, true);
+  x1.timeout = 10000;
+  x1.setRequestHeader('Accept','application/vnd.github.raw');
+  x1.setRequestHeader('Cache-Control','no-cache');
+  if(tok) x1.setRequestHeader('Authorization','token '+tok);
+  x1.onreadystatechange = function(){
+    if(x1.readyState!==4) return;
+    if(x1.status===200 && x1.responseText){ cb(200, x1.responseText); return; }
+    if(x1.status===404){ cb(404, ''); return; }
+    pubFetchRawCDN(path, cb);
+  };
+  x1.ontimeout = function(){ pubFetchRawCDN(path, cb); };
+  x1.send();
+}
+
+function pubFetchRawCDN(path, cb){
+  var url = 'https://raw.githubusercontent.com/'+PUB_REPO+'/main/'+path+'?_='+Date.now();
   var xhr = new XMLHttpRequest();
   xhr.open('GET', url, true);
   xhr.timeout = 10000;
+  xhr.setRequestHeader('Cache-Control','no-cache');
   xhr.onreadystatechange = function(){ if(xhr.readyState===4) cb(xhr.status, xhr.responseText); };
   xhr.ontimeout = function(){ cb(408, ''); };
   xhr.send();
@@ -3336,11 +3388,12 @@ function pubFetchRaw(path, cb){
 // Загрузка через GitHub API (для листинга папок)
 function pubFetchAPI(path, cb){
   var tok = getToken();
-  var url = 'https://api.github.com/repos/'+PUB_REPO+'/contents/'+path+'?ref=main';
+  var url = 'https://api.github.com/repos/'+PUB_REPO+'/contents/'+path+'?ref=main&_='+Date.now();
   var xhr = new XMLHttpRequest();
   xhr.open('GET', url, true);
   xhr.timeout = 10000;
   xhr.setRequestHeader('Accept','application/vnd.github.v3+json');
+  xhr.setRequestHeader('Cache-Control','no-cache');
   if(tok) xhr.setRequestHeader('Authorization','token '+tok);
   xhr.onreadystatechange = function(){ if(xhr.readyState===4) cb(xhr.status, xhr.responseText); };
   xhr.ontimeout = function(){ cb(408, ''); };
@@ -3353,6 +3406,7 @@ function pubRenderCalendar(elId, labelId, year, month, datesWithData, selectedDa
   var lbl = document.getElementById(labelId);
   if(!el) return;
   var months = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+  var TP = mskParts();
   lbl.textContent = months[month]+' '+year;
   var firstDay = new Date(year, month, 1).getDay();
   firstDay = (firstDay===0)?6:firstDay-1;
@@ -3368,7 +3422,8 @@ function pubRenderCalendar(elId, labelId, year, month, datesWithData, selectedDa
     var ds = dd+'.'+mm+'.'+year;
     var hasData = datesWithData.indexOf(ds)>=0;
     var isSel = ds===selectedDate;
-    var cls = 'pub-cal-day'+(hasData?' has-data':'')+(isSel?' selected':'');
+    var isToday = (d===TP.d && (month+1)===TP.m && year===TP.y);   // fix30: сегодня по Москве
+    var cls = 'pub-cal-day'+(hasData?' has-data':'')+(isToday?' today':'')+(isSel?' selected':'');
     html += '<div class="'+cls+'" data-date="'+ds+'" onclick="'+onDayClick+'(\''+ds+'\')" title="'+ds+'">'
       +'<span>'+d+'</span>'+(hasData?'<span class="pub-cal-dot"></span>':'')+'</div>';
   }
@@ -3376,15 +3431,15 @@ function pubRenderCalendar(elId, labelId, year, month, datesWithData, selectedDa
 }
 
 // ══ ИИ-СТРАТЕГ-ПУБЛИЦИСТ ══
-var stratCalYear = new Date().getFullYear();
-var stratCalMonth = new Date().getMonth();
+var stratCalYear = mskParts().y;
+var stratCalMonth = mskParts().m-1;
 var stratCalDates = [];
 var stratCalSelected = null;
 var _stratBusy = false;
 
 function stratInitCal(){
-  stratCalYear = new Date().getFullYear();
-  stratCalMonth = new Date().getMonth();
+  stratCalYear = mskParts().y;
+  stratCalMonth = mskParts().m-1;
   stratCalSelected = null;
   // Загружаем список дат из social/strategy/
   pubFetchAPI('social/strategy', function(status, text){
@@ -3613,8 +3668,8 @@ function loadPubCopyist(){ stratInitCal(); }
 function stratCalBranch(){}
 
 // ══ ИИ-КОПИРАЙТЕР-ПУБЛИЦИСТ ══
-var copyCalYear = new Date().getFullYear();
-var copyCalMonth = new Date().getMonth();
+var copyCalYear = mskParts().y;
+var copyCalMonth = mskParts().m-1;
 var copyCalDates = [];
 var copyCalSelected = null;
 var _copyBusy = false;
@@ -3624,8 +3679,8 @@ var _copyPlatformCache = {}; // dateStr → { dzen: md, vk: md, ... }
 var COPY_PLATFORMS = ['dzen','vk','tenchat','welcome','vc','mitt'];
 
 function copyInitCal(){
-  copyCalYear = new Date().getFullYear();
-  copyCalMonth = new Date().getMonth();
+  copyCalYear = mskParts().y;
+  copyCalMonth = mskParts().m-1;
   copyCalSelected = null;
   _copyPlatformCache = {};
   document.getElementById('copy-body').innerHTML =
@@ -3695,7 +3750,8 @@ function copySelectCopyTab(btn, platform){
 function copyLoadPlatform(dateStr, platform){
   var body = document.getElementById('copy-body');
   // Проверяем кеш
-  if(_copyPlatformCache[dateStr] && _copyPlatformCache[dateStr][platform]!==undefined){
+  // fix30: сегодняшние публикации не берём из памяти — файл может обновиться
+  if(dateStr!==mskDMY() && _copyPlatformCache[dateStr] && _copyPlatformCache[dateStr][platform]!==undefined){
     copyRenderPlatform(platform, _copyPlatformCache[dateStr][platform]);
     return;
   }
@@ -4404,7 +4460,7 @@ function sendToPublicist(news){
   }
   setBtnState('loading');
 
-  var now = new Date();
+  var now = mskDate();               // fix30: неделя считается по Москве
   var day = now.getDay();
   var diffMon = (day === 0) ? -6 : 1 - day;
   var mon = new Date(now); mon.setDate(now.getDate() + diffMon);
@@ -4415,7 +4471,7 @@ function sendToPublicist(news){
   var slug = news.title.toLowerCase()
     .replace(/[а-яё]/g, function(c){ var m={'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'yo','ж':'zh','з':'z','и':'i','й':'j','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'h','ц':'ts','ч':'ch','ш':'sh','щ':'sch','ъ':'','ы':'y','ь':'','э':'e','ю':'yu','я':'ya'}; return m[c]||c; })
     .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').substring(0,60);
-  var ts = now.toISOString().slice(0,10);
+  var ts = mskISO();               // fix30: было toISOString() — давало вчерашнюю дату
   var filename = ts+'-'+slug+'.md';
 
   var md = [];
@@ -4430,7 +4486,7 @@ function sendToPublicist(news){
   if(news.body){ md.push(news.body.trim()); md.push(''); }
   if(news.neyruRec){ md.push('---'); md.push(''); md.push('## \uD83C\uDFAF Рекомендация для НЭЙРУ'); md.push(''); md.push(news.neyruRec.trim()); md.push(''); }
   md.push('---');
-  md.push('*Отправлено в neuru-publish: '+new Date().toLocaleString('ru')+'*');
+  md.push('*Отправлено в neuru-publish: '+mskStamp()+'*');
   var mdText = md.join('\n');
 
   var PUBLISH_REPO = 'Elenafromsochi/neuru-publish';
@@ -4532,8 +4588,30 @@ var calData={
 };
 var curMon='cur';
 
+/* fix30: вкладка может висеть открытой сутками — следим за сменой
+   московской даты и пересобираем календарь, чтобы рамка «сегодня»
+   не залипала на дне загрузки страницы. */
+var _mskDayKey = mskISO();
+function syncMskDay(){
+  var k = mskISO();
+  if(k === _mskDayKey) return;
+  _mskDayKey = k;
+  var T = mskParts();
+  CY=T.y; CM=T.m; CD=T.d;
+  M1=(CM===1?12:CM-1); Y1=(CM===1?CY-1:CY); M2=CM; Y2=CY;
+  calData.prev={label:MON_NOM[M1]+' '+Y1,year:Y1,monthInt:M1,monthNum:String(M1).padStart(2,'0'),days:daysInMonth(Y1,M1),prevDays:firstWD(Y1,M1),hasDays:[]};
+  calData.cur ={label:MON_NOM[M2]+' '+Y2,year:Y2,monthInt:M2,monthNum:String(M2).padStart(2,'0'),days:daysInMonth(Y2,M2),prevDays:firstWD(Y2,M2),hasDays:[]};
+  var tp=document.getElementById('tab-prev'); if(tp) tp.textContent=MON_NOM[M1];
+  var tc=document.getElementById('tab-cur');  if(tc) tc.textContent=MON_NOM[M2];
+  ghCache={};
+  buildCal(curMon);
+}
+setInterval(syncMskDay, 60000);
+document.addEventListener('visibilitychange', function(){ if(!document.hidden) syncMskDay(); });
+
 function buildCal(mon){
   var d=calData[mon];
+  var T=mskParts();            // fix30: «сегодня» пересчитывается при каждой отрисовке
   document.getElementById('cal-month').textContent=d.label;
   var grid=document.getElementById('cal-grid');
   grid.innerHTML='';
@@ -4545,7 +4623,7 @@ function buildCal(mon){
     var cell=document.createElement('div');
     var cls='cal-d';
     if(d.hasDays.indexOf(day)>=0) cls+=' has';
-    if(mon==='cur'&&day===CD) cls+=' today';
+    if(day===T.d&&d.monthInt===T.m&&d.year===T.y) cls+=' today';
     cell.className=cls; cell.textContent=day;
     (function(dd,mm){ cell.addEventListener('click',function(){ selDay(this,dd,mm); }); })(day,mon);
     grid.appendChild(cell);
@@ -4571,7 +4649,9 @@ function selDay(el,day,mon){
 
 function loadNews(day,mon,ds){
   if(!getToken()) return Promise.resolve(null);
-  if(ghCache[ds]!==undefined) return Promise.resolve(ghCache[ds]);
+  // fix30: сегодняшний дайджест не кэшируем — агент может перезаписать файл
+  // в течение дня, и панель должна показывать актуальную версию.
+  if(ds!==mskISO() && ghCache[ds]!==undefined) return Promise.resolve(ghCache[ds]);
   return ghFetch('research/'+ds+'.md').then(function(md){
     var parsed=parseMdNews(md);
     ghCache[ds]=parsed;
@@ -4715,7 +4795,7 @@ function copyNewsCard(){
 
 var weekOffset=0;
 function fmtDate(d){ return String(d.getDate()).padStart(2,'0')+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+d.getFullYear(); }
-function getWeekStart(off){ var n=new Date(),day=n.getDay()||7,mon=new Date(n); mon.setDate(n.getDate()-day+1+(off*7)); mon.setHours(0,0,0,0); return mon; }
+function getWeekStart(off){ var n=mskDate(),day=n.getDay()||7,mon=new Date(n); mon.setDate(n.getDate()-day+1+(off*7)); mon.setHours(0,0,0,0); return mon; }
 function getWeekNum(d){ var dt=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())); dt.setUTCDate(dt.getUTCDate()+4-(dt.getUTCDay()||7)); var y0=new Date(Date.UTC(dt.getUTCFullYear(),0,1)); return Math.ceil((((dt-y0)/86400000)+1)/7); }
 function weekFilename(off){ var mon=getWeekStart(off),sun=new Date(mon); sun.setDate(mon.getDate()+6); return 'week-'+fmtDate(mon)+'-'+fmtDate(sun)+'.md'; }
 
@@ -4939,11 +5019,7 @@ function sendToClaudeVision(images, context){
     });
   });
 
-  var today = new Date();
-  var dd = String(today.getDate()).padStart(2,'0');
-  var mm = String(today.getMonth()+1).padStart(2,'0');
-  var yyyy = today.getFullYear();
-  var dateStr = dd+'.'+mm+'.'+yyyy;
+  var dateStr = mskDMY();            // fix30: дата по Москве
 
   // Промпт: только перевод цифр, никакого анализа
   var weekPeriod = (document.getElementById('an-week-context').value||'').trim() || dateStr;
@@ -5041,7 +5117,7 @@ function commitAnStats(){
       : txt;
 
     var body = {
-      message: 'stats-input: добавлена статистика '+new Date().toLocaleDateString('ru'),
+      message: 'stats-input: добавлена статистика '+mskDMY(),
       content: btoa(unescape(encodeURIComponent(newContent))),
       branch: BRANCH
     };
