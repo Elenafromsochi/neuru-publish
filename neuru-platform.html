@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-09-fix31 -->
+<!DOCTYPE html><!-- v2026-09-10-fix32 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -446,7 +446,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 09.09 · fix31</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 10.09 · fix32</div>
   </div>
 </aside>
 
@@ -3772,6 +3772,18 @@ function copyLoadPlatform(dateStr, platform){
   });
 }
 
+/* fix32: Хэштеги / Промпт для картинки / Знаков — рабочие поля копирайтера.
+   Они нужны при копировании и при отправке в постинг (оттуда берётся промпт
+   картинки), поэтому из данных их не удаляем — прячем только при показе. */
+function pcpyStripService(x){
+  return String(x||'')
+    .replace(/^[ \t]*(?:\*\*)?Хэштеги(?:\*\*)?\s*:[\s\S]*?(?=\n[ \t]*\n|$)/gim, '')
+    .replace(/^[ \t]*(?:\*\*)?Промпт\s+для\s+картинки(?:\*\*)?\s*:[\s\S]*?(?=\n[ \t]*\n|$)/gim, '')
+    .replace(/^[ \t]*(?:\*\*)?Знаков(?:\*\*)?\s*:[^\n]*$/gim, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function copyRenderPlatform(platform, md){
   var body = document.getElementById('copy-body');
   var label = PCPY_PLATFORM_LABELS[platform]||platform;
@@ -3818,13 +3830,17 @@ function copyRenderPlatform(platform, md){
 
     if(t.length < 50) return;
 
-    // 4. Служебные строки в блоке — очищаем
+    // 4. fix32: заголовок публикации берём из строки «Публикация N — <заголовок>»
+    //    и показываем отдельной строкой, уже без префикса «Публикация N —».
+    var head = t.match(/^Публикация\s*[№#]?\s*\d+\s*[—–-]\s*([^\n]*)/im);
+    var artTitle = head ? head[1].replace(/\*\*/g,'').replace(/^#+\s*/,'').trim() : '';
+
     var cleaned = t
       .replace(/^Публикация\s*[№#]?\s*\d+\s*[—-]\s*[^\n]*\n?/im, '')
       .replace(/^(Угол|CTA-тип|Площадка|Формат|Структура|🗒 Постинг|Примечание для постинга)[^\n]*\n?/gim, '')
       .trim();
     if(cleaned.length < 50) return;
-    articles.push(cleaned);
+    articles.push({ title: artTitle, body: cleaned });
   });
 
   // Если заголовок не найден в первом блоке — ищем в начале файла
@@ -3835,7 +3851,7 @@ function copyRenderPlatform(platform, md){
 
   // Также ищем блок вопросов в последней публикации если не отделён ---
   if(!questionsBlock && articles.length > 0){
-    var last = articles[articles.length - 1];
+    var last = articles[articles.length - 1].body;
     if(last.match(/ВОПРОС(Ы)?\s*К\s*ЧЕЛОВЕКУ/im) ||
        last.match(/Сводный\s*список\s*вопросов/im) ||
        last.match(/^#+\s*ВОПРОС/im)){
@@ -3856,9 +3872,12 @@ function copyRenderPlatform(platform, md){
   html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:16px">'+label+' — '+articles.length+' публикаций</div>';
 
   articles.forEach(function(art, i){
-    var titleMatch = art.match(/^#\s+(.+)/m);
-    var title = titleMatch ? titleMatch[1].replace(/\*\*/g,'').trim() : '';
-    var artBody = titleMatch ? art.replace(titleMatch[0], '').trim() : art;
+    var raw = art.body;
+    var titleMatch = raw.match(/^#\s+(.+)/m);
+    // Заголовок из строки «Публикация N — …»; если её нет — из markdown-заголовка
+    var title = art.title || (titleMatch ? titleMatch[1].replace(/\*\*/g,'').trim() : '');
+    var artBody = titleMatch ? raw.replace(titleMatch[0], '').trim() : raw;
+    artBody = pcpyStripService(artBody);   // fix32: прячем служебные поля
 
     html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px 22px;margin-bottom:20px">'
       +'<div style="font-size:10px;color:var(--muted);margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:.06em">Публикация '+(i+1)+'</div>'
@@ -3888,7 +3907,7 @@ function copyRenderPlatform(platform, md){
   }
 
   body.innerHTML = html;
-  window._copyArticles = articles;
+  window._copyArticles = articles.map(function(a){ return a.body; });
 }
 
 
