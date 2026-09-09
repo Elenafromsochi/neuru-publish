@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-09-fix30 -->
+<!DOCTYPE html><!-- v2026-09-09-fix31 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -446,7 +446,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 09.09 · fix30</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 09.09 · fix31</div>
   </div>
 </aside>
 
@@ -1955,15 +1955,15 @@ function ghHeaders(){
 }
 
 function ghFetch(path){
-  // fix30: &_=timestamp + no-cache — иначе Safari и GitHub API отдают
-  // старую версию файла и в панели видно вчерашнее содержимое.
+  // fix31: обход кэша ТОЛЬКО через &_=timestamp.
+  // Заголовок Cache-Control сюда ставить нельзя — он не входит в CORS-safelist
+  // и не разрешён api.github.com: preflight падает и запрос вообще не уходит.
   var url = 'https://api.github.com/repos/'+REPO+'/contents/'+path+'?ref='+BRANCH+'&_='+Date.now();
   var headers = ghHeaders();
   return new Promise(function(resolve, reject){
     var xhr = new XMLHttpRequest();
     xhr.open('GET', url, true);
     for(var h in headers) xhr.setRequestHeader(h, headers[h]);
-    xhr.setRequestHeader('Cache-Control','no-cache');
     xhr.onload = function(){
       if(xhr.status === 404){ reject(new Error('not_found')); return; }
       if(xhr.status === 401){ reject(new Error('auth')); return; }
@@ -2128,7 +2128,7 @@ function showSec(id, el){
   if(id==='analytics'){ loadAnWeekList(); }
 }
 
-/* ══ МОСКОВСКОЕ ВРЕМЯ — ЕДИНЫЙ ИСТОЧНИК ДАТ (fix30) ══
+/* ══ МОСКОВСКОЕ ВРЕМЯ — ЕДИНЫЙ ИСТОЧНИК ДАТ (fix31) ══
    Все календари и имена файлов считаются по Europe/Moscow,
    независимо от часового пояса компьютера. */
 function mskParts(){
@@ -3254,7 +3254,7 @@ function sendToInterview(news){ pubSelectedNews=news; showSec('pub-interview',do
 function sendToStrategy(news){
   pubSelectedNews = news;
   if(!getToken()){ alert('Добавьте GitHub токен в левом меню'); return; }
-  var now = mskDate();               // fix30: неделя считается по Москве
+  var now = mskDate();               // fix31: неделя считается по Москве
   var day = now.getDay() || 7;
   var mon = new Date(now); mon.setDate(now.getDate() - day + 1); mon.setHours(0,0,0,0);
   var sun = new Date(mon); sun.setDate(mon.getDate() + 6);
@@ -3350,7 +3350,7 @@ function pubFetchWithFallback(pathNew, pathOld, cb){
 }
 
 // Загрузка файла из neuru-publish.
-// fix30: raw.githubusercontent отдаётся через CDN и кэшируется — из-за этого
+// fix31: raw.githubusercontent отдаётся через CDN и кэшируется — из-за этого
 // панель показывала старую версию публикаций, пока на GitHub лежала новая.
 // Основной путь теперь GitHub API (всегда актуальный коммит main),
 // raw остаётся запасным вариантом, если API недоступен или лимит исчерпан.
@@ -3361,14 +3361,24 @@ function pubFetchRaw(path, cb){
   var x1 = new XMLHttpRequest();
   x1.open('GET', apiUrl, true);
   x1.timeout = 10000;
-  x1.setRequestHeader('Accept','application/vnd.github.raw');
-  x1.setRequestHeader('Cache-Control','no-cache');
+  // Заголовки ровно те же, что в рабочем ghFetch — никаких нестандартных,
+  // иначе CORS-preflight на api.github.com не проходит.
+  x1.setRequestHeader('Accept','application/vnd.github.v3+json');
   if(tok) x1.setRequestHeader('Authorization','token '+tok);
   x1.onreadystatechange = function(){
     if(x1.readyState!==4) return;
-    if(x1.status===200 && x1.responseText){ cb(200, x1.responseText); return; }
     if(x1.status===404){ cb(404, ''); return; }
-    pubFetchRawCDN(path, cb);
+    if(x1.status===200){
+      try{
+        var json = JSON.parse(x1.responseText);
+        if(json && json.content){
+          var raw = json.content.replace(/\n/g,''), txt;
+          try{ txt = decodeURIComponent(escape(atob(raw))); }catch(e){ txt = atob(raw); }
+          cb(200, txt); return;
+        }
+      }catch(e){}
+    }
+    pubFetchRawCDN(path, cb);   // API недоступен или файл слишком большой
   };
   x1.ontimeout = function(){ pubFetchRawCDN(path, cb); };
   x1.send();
@@ -3379,7 +3389,6 @@ function pubFetchRawCDN(path, cb){
   var xhr = new XMLHttpRequest();
   xhr.open('GET', url, true);
   xhr.timeout = 10000;
-  xhr.setRequestHeader('Cache-Control','no-cache');
   xhr.onreadystatechange = function(){ if(xhr.readyState===4) cb(xhr.status, xhr.responseText); };
   xhr.ontimeout = function(){ cb(408, ''); };
   xhr.send();
@@ -3393,7 +3402,6 @@ function pubFetchAPI(path, cb){
   xhr.open('GET', url, true);
   xhr.timeout = 10000;
   xhr.setRequestHeader('Accept','application/vnd.github.v3+json');
-  xhr.setRequestHeader('Cache-Control','no-cache');
   if(tok) xhr.setRequestHeader('Authorization','token '+tok);
   xhr.onreadystatechange = function(){ if(xhr.readyState===4) cb(xhr.status, xhr.responseText); };
   xhr.ontimeout = function(){ cb(408, ''); };
@@ -3422,7 +3430,7 @@ function pubRenderCalendar(elId, labelId, year, month, datesWithData, selectedDa
     var ds = dd+'.'+mm+'.'+year;
     var hasData = datesWithData.indexOf(ds)>=0;
     var isSel = ds===selectedDate;
-    var isToday = (d===TP.d && (month+1)===TP.m && year===TP.y);   // fix30: сегодня по Москве
+    var isToday = (d===TP.d && (month+1)===TP.m && year===TP.y);   // fix31: сегодня по Москве
     var cls = 'pub-cal-day'+(hasData?' has-data':'')+(isToday?' today':'')+(isSel?' selected':'');
     html += '<div class="'+cls+'" data-date="'+ds+'" onclick="'+onDayClick+'(\''+ds+'\')" title="'+ds+'">'
       +'<span>'+d+'</span>'+(hasData?'<span class="pub-cal-dot"></span>':'')+'</div>';
@@ -3750,7 +3758,7 @@ function copySelectCopyTab(btn, platform){
 function copyLoadPlatform(dateStr, platform){
   var body = document.getElementById('copy-body');
   // Проверяем кеш
-  // fix30: сегодняшние публикации не берём из памяти — файл может обновиться
+  // fix31: сегодняшние публикации не берём из памяти — файл может обновиться
   if(dateStr!==mskDMY() && _copyPlatformCache[dateStr] && _copyPlatformCache[dateStr][platform]!==undefined){
     copyRenderPlatform(platform, _copyPlatformCache[dateStr][platform]);
     return;
@@ -4460,7 +4468,7 @@ function sendToPublicist(news){
   }
   setBtnState('loading');
 
-  var now = mskDate();               // fix30: неделя считается по Москве
+  var now = mskDate();               // fix31: неделя считается по Москве
   var day = now.getDay();
   var diffMon = (day === 0) ? -6 : 1 - day;
   var mon = new Date(now); mon.setDate(now.getDate() + diffMon);
@@ -4471,7 +4479,7 @@ function sendToPublicist(news){
   var slug = news.title.toLowerCase()
     .replace(/[а-яё]/g, function(c){ var m={'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'yo','ж':'zh','з':'z','и':'i','й':'j','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'h','ц':'ts','ч':'ch','ш':'sh','щ':'sch','ъ':'','ы':'y','ь':'','э':'e','ю':'yu','я':'ya'}; return m[c]||c; })
     .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').substring(0,60);
-  var ts = mskISO();               // fix30: было toISOString() — давало вчерашнюю дату
+  var ts = mskISO();               // fix31: было toISOString() — давало вчерашнюю дату
   var filename = ts+'-'+slug+'.md';
 
   var md = [];
@@ -4588,7 +4596,7 @@ var calData={
 };
 var curMon='cur';
 
-/* fix30: вкладка может висеть открытой сутками — следим за сменой
+/* fix31: вкладка может висеть открытой сутками — следим за сменой
    московской даты и пересобираем календарь, чтобы рамка «сегодня»
    не залипала на дне загрузки страницы. */
 var _mskDayKey = mskISO();
@@ -4611,7 +4619,7 @@ document.addEventListener('visibilitychange', function(){ if(!document.hidden) s
 
 function buildCal(mon){
   var d=calData[mon];
-  var T=mskParts();            // fix30: «сегодня» пересчитывается при каждой отрисовке
+  var T=mskParts();            // fix31: «сегодня» пересчитывается при каждой отрисовке
   document.getElementById('cal-month').textContent=d.label;
   var grid=document.getElementById('cal-grid');
   grid.innerHTML='';
@@ -4647,9 +4655,11 @@ function selDay(el,day,mon){
   loadNews(day,mon,ds).then(function(parsed){ renderNewsList(day,mon,ds,parsed); });
 }
 
+var _ghLastErr = '';
 function loadNews(day,mon,ds){
-  if(!getToken()) return Promise.resolve(null);
-  // fix30: сегодняшний дайджест не кэшируем — агент может перезаписать файл
+  _ghLastErr = '';
+  if(!getToken()){ _ghLastErr='no_token'; return Promise.resolve(null); }
+  // fix31: сегодняшний дайджест не кэшируем — агент может перезаписать файл
   // в течение дня, и панель должна показывать актуальную версию.
   if(ds!==mskISO() && ghCache[ds]!==undefined) return Promise.resolve(ghCache[ds]);
   return ghFetch('research/'+ds+'.md').then(function(md){
@@ -4662,7 +4672,10 @@ function loadNews(day,mon,ds){
     }
     if(parsed.news) NEWS[ds]=parsed.news;
     return parsed;
-  }).catch(function(){ return null; });
+  }).catch(function(e){
+    _ghLastErr = (e && e.message) || 'network';   // fix31: сохраняем настоящую причину
+    return null;
+  });
 }
 
 function parseMdNews(md){
@@ -4706,7 +4719,16 @@ function renderNewsList(day,mon,ds,parsed){
   var ghUrl='https://github.com/Elenafromsochi/neuru-email/blob/main/research/'+ds+'.md';
   var hdr='<div class="np-date">'+day+' '+ml+' '+d.year+'</div>'
     +'<div class="np-sub"><span>'+items.length+' \u043d\u043e\u0432\u043e\u0441\u0442'+(items.length===1?'\u044c':items.length<5?'\u0438':'\u0435\u0439')+' &middot;</span> <a href="'+ghUrl+'" target="_blank">research/'+ds+'.md</a></div>';
-  if(!parsed){ panel.innerHTML=hdr+'<div class="empty"><div class="empty-icon">🔑</div><div>\u0414\u043e\u0431\u0430\u0432\u044c\u0442\u0435 GitHub \u0442\u043e\u043a\u0435\u043d \u0432 \u043b\u0435\u0432\u043e\u043c \u043c\u0435\u043d\u044e</div></div>'; return; }
+  if(!parsed){
+    // fix31: раньше любая ошибка сети показывалась как «нет токена» — это сбивало с толку
+    var em, et;
+    if(_ghLastErr==='no_token'){ em='\uD83D\uDD11'; et='Добавьте GitHub токен в левом меню'; }
+    else if(_ghLastErr==='not_found'){ em='\uD83D\uDCED'; et='Файл research/'+ds+'.md ещё не создан'; }
+    else if(_ghLastErr==='auth'){ em='\uD83D\uDD11'; et='Токен отклонён GitHub — проверьте права (scope: repo)'; }
+    else { em='\u26A0\uFE0F'; et='Не удалось загрузить из GitHub ('+(_ghLastErr||'network')+'). Проверьте сеть и обновите страницу.'; }
+    panel.innerHTML=hdr+'<div class="empty"><div class="empty-icon">'+em+'</div><div>'+et+'</div></div>';
+    return;
+  }
   if(!items.length&&!special.context&&!special.idea&&!special.questions){ panel.innerHTML=hdr+'<div class="empty"><div class="empty-icon">📭</div><div>\u041d\u0435\u0442 \u043d\u043e\u0432\u043e\u0441\u0442\u0435\u0439.</div></div>'; return; }
   var rows=items.map(function(n,i){ return '<div class="hl-row" id="hl-'+i+'" onclick="openNews('+i+')"><div class="hl-tag '+n.tagClass+'">'+n.tag+'</div><div class="hl-title">'+n.title+'</div><div class="hl-time">'+n.time+'</div></div>'; }).join('');
   var spParts=[];
@@ -5019,7 +5041,7 @@ function sendToClaudeVision(images, context){
     });
   });
 
-  var dateStr = mskDMY();            // fix30: дата по Москве
+  var dateStr = mskDMY();            // fix31: дата по Москве
 
   // Промпт: только перевод цифр, никакого анализа
   var weekPeriod = (document.getElementById('an-week-context').value||'').trim() || dateStr;
