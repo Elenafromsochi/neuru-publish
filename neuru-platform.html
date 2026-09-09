@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-10-fix32 -->
+<!DOCTYPE html><!-- v2026-09-10-fix33 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -446,7 +446,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 10.09 · fix32</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 10.09 · fix33</div>
   </div>
 </aside>
 
@@ -3976,12 +3976,12 @@ function imgStepHtml(){
     +'font-size:12px;line-height:1.65;border:1px solid var(--border);border-radius:10px;padding:10px;'
     +'background:var(--card);color:var(--text);resize:vertical">'+imgEsc(s.prompt)+'</textarea>'
     +'<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'
+    // fix33: было три кнопки, из них две одинаковые. Осталось две разные:
+    // «Улучшить промпт» переписывает текст, «Сгенерировать картинку» рисует по нему.
     +'<button onclick="imgGenPrompt(this)" style="background:var(--grad);color:#fff;border:none;border-radius:8px;'
-    +'padding:8px 15px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">✨ Генерация</button>'
+    +'padding:8px 15px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">✨ Улучшить промпт</button>'
     +'<button onclick="imgGenPicture(this)" style="background:#7C3AED;color:#fff;border:none;border-radius:8px;'
     +'padding:8px 15px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:8px">🎨 Сгенерировать картинку</button>'
-    +'<button onclick="imgGenPicture(this)" style="background:#059669;color:#fff;border:none;border-radius:8px;'
-    +'padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;margin-left:8px">🖼 Сгенерировать картинку</button>'
     +'<button onclick="imgCopyPrompt()" style="background:none;border:1px solid var(--border);border-radius:8px;'
     +'padding:8px 15px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--text)">Скопировать</button>'
     +'</div></div>'
@@ -4041,54 +4041,9 @@ window.imgCopyPrompt = function(){
   var t = document.getElementById('img-prompt'); if(!t) return;
   navigator.clipboard.writeText(t.value).then(function(){ alert('Промпт скопирован'); });
 };
-// Генерация иллюстрации: промпт уходит в воркер, тот дергает YandexART
-// и возвращает готовый JPEG в base64. Ключи лежат только в воркере.
-var IMAGE_PROXY = String(CLAUDE_PROXY||'').replace(/\/api\/claude\/?$/, '/api/image');
-
-window.imgGenPicture = function(btn){
-  var ta = document.getElementById('img-prompt');
-  var st = document.getElementById('img-status');
-  var pr = ta ? ta.value.trim() : '';
-  if(pr.length < 10){ alert('Сначала напишите или сгенерируйте промпт для иллюстрации.'); return; }
-
-  var old = btn.textContent;
-  btn.textContent = 'Рисую… (до минуты)'; btn.disabled = true;
-  if(st) st.textContent = 'YandexART генерирует изображение, это занимает 10–40 секунд…';
-
-  var xhr = new XMLHttpRequest();
-  xhr.open('POST', IMAGE_PROXY, true);
-  xhr.setRequestHeader('Content-Type','application/json');
-  xhr.timeout = 120000;
-  xhr.onload = function(){
-    btn.textContent = old; btn.disabled = false;
-    var j = null; try{ j = JSON.parse(xhr.responseText); }catch(e){}
-    if(!j){
-      if(st) st.innerHTML = '<span style="color:#DC2626">Прокси вернул не JSON (код '+xhr.status+'): '
-        + imgEsc(String(xhr.responseText).slice(0,200)) + '</span>';
-      return;
-    }
-    if(!j.image){
-      if(st) st.innerHTML = '<span style="color:#DC2626">'+imgEsc(j.error || 'Изображение не получено')+'</span>';
-      return;
-    }
-    _imgStep.imgData = j.image;
-    _imgStep.imgExt  = 'jpg';
-    var p = document.getElementById('img-preview');
-    if(p) p.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Картинка сгенерирована YandexART:</div>'
-      + '<img src="data:image/jpeg;base64,'+j.image+'" style="max-width:100%;border-radius:12px;border:1px solid var(--border)">';
-    if(st) st.innerHTML = '<span style="color:#10B981">Готово. Можно отправлять в постинг.</span>';
-    window.imgUpdateReady();
-  };
-  xhr.onerror = function(){
-    btn.textContent = old; btn.disabled = false;
-    if(st) st.innerHTML = '<span style="color:#DC2626">Не удалось связаться с прокси: '+imgEsc(IMAGE_PROXY)+'</span>';
-  };
-  xhr.ontimeout = function(){
-    btn.textContent = old; btn.disabled = false;
-    if(st) st.innerHTML = '<span style="color:#DC2626">Генерация не уложилась в две минуты. Попробуйте ещё раз.</span>';
-  };
-  xhr.send(JSON.stringify({ prompt: pr, widthRatio: 16, heightRatio: 9 }));
-};
+// fix33: здесь была вторая, неиспользуемая реализация imgGenPicture
+// (маршрут /api/image). Её перезаписывала версия ниже — удалена, чтобы
+// не было двух функций с одним именем и двух одинаковых кнопок.
 
 // Генерация картинки через YandexART. Ключ лежит в воркере, не здесь:
 // дашборд открыт всем, класть в него ключи нельзя.
@@ -4596,6 +4551,19 @@ function callClaude(systemPrompt,messages,callback){
     if(text){ callback(String(text)); return; }
     // Ответ есть, но текста в нём нет — показываем, что именно пришло
     var err = (json.error && (json.error.message || json.error.type)) || json.message || '';
+    // fix33: 401 — это ответ самого Anthropic, пришедший через воркер.
+    // Ключ живёт в Cloudflare, в дашборде его нет, поэтому объясняем прямо.
+    var isAuth = xhr.status === 401 || xhr.status === 403
+      || (json.error && json.error.type === 'authentication_error')
+      || /api key/i.test(err);
+    if(isAuth){
+      callback('Ключ Anthropic в Cloudflare-воркере недействителен (код '+xhr.status+': '+err+').\n\n'
+        + 'Дашборд ключи не хранит — он только обращается к воркеру '+CLAUDE_PROXY+'.\n'
+        + 'Обновить ключ: Cloudflare → Workers & Pages → neuru-proxy → Settings → '
+        + 'Variables and Secrets → ANTHROPIC_API_KEY, затем Deploy.\n'
+        + 'Поле «API-ключ» в Админ-панели на этот запрос не влияет.');
+      return;
+    }
     callback('Прокси ответил без текста (код '+xhr.status+')'
       + (err ? ': '+err : '') + '\n\nОтвет целиком:\n' + raw.substring(0, 400));
   };
