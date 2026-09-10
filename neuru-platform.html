@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-10-fix40 -->
+<!DOCTYPE html><!-- v2026-09-10-fix41 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -446,7 +446,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 10.09 · fix40</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 10.09 · fix41</div>
   </div>
 </aside>
 
@@ -6064,7 +6064,7 @@ function renderAnMd(text){
     for(var i=0;i<AG.length;i++){
       var id=AG[i][0];
       try{
-        var r=await fetch("https://api.github.com/repos/"+repo+"/contents/engine/prompts/"+id+".txt?ref=main",{headers:hdr});
+        var r=await fetch("https://api.github.com/repos/"+repo+"/contents/engine/prompts/"+id+".txt?ref=main&_="+Date.now(),{headers:hdr});
         if(r.status===404){ missing.push(AG[i][1]); continue; }
         if(!r.ok){ errs.push(AG[i][1]+": "+r.status); continue; }
         var d=await r.json();
@@ -6083,19 +6083,47 @@ function renderAnMd(text){
     if(manual) admToast("Промпты перечитаны");
   };
 
+  /* fix41: запись промпта падала с 409 «does not match <sha>».
+     Причина: sha читался без обхода кэша, Safari отдавал сохранённый ответ,
+     и панель писала со устаревшей версией файла. Теперь у запроса sha есть
+     &_=timestamp, а на случай, если файл изменился между чтением и записью,
+     сделан один повтор со свежим sha. */
+  async function admReadSha(url, hdr){
+    var g = await fetch(url+"?ref=main&_="+Date.now(), {headers:hdr});
+    if(g.status!==200) return null;
+    try{ return (await g.json()).sha || null; }catch(e){ return null; }
+  }
+
   async function admSaveToGit(id, content){
     var repo=(typeof REPO!=="undefined"&&REPO)?REPO:"Elenafromsochi/neuru-email";
     var t=(window.getToken?getToken():localStorage.getItem("gh_token"))||"";
     var path="engine/prompts/"+id+".txt";
     var url="https://api.github.com/repos/"+repo+"/contents/"+path;
     var hdr={"Authorization":"Bearer "+t,"Accept":"application/vnd.github+json"};
-    var sha=null;
-    var g=await fetch(url+"?ref=main",{headers:hdr});
-    if(g.status===200){ var d=await g.json(); sha=d.sha; }
-    var body={message:"admin: промпт "+id, content:admB64(content), branch:"main"};
-    if(sha) body.sha=sha;
-    var p=await fetch(url,{method:"PUT",headers:Object.assign({},hdr,{"Content-Type":"application/json"}),body:JSON.stringify(body)});
-    if(!p.ok) throw new Error(id+": "+p.status+" "+(await p.text()).slice(0,120));
+
+    async function attempt(){
+      var sha = await admReadSha(url, hdr);
+      var body={message:"admin: промпт "+id, content:admB64(content), branch:"main"};
+      if(sha) body.sha=sha;
+      return await fetch(url,{method:"PUT",headers:Object.assign({},hdr,{"Content-Type":"application/json"}),body:JSON.stringify(body)});
+    }
+
+    var p = await attempt();
+    if(p.status===409){
+      // Кто-то изменил файл между чтением и записью — берём sha заново
+      p = await attempt();
+    }
+    if(!p.ok){
+      var txt = (await p.text()).slice(0,160);
+      if(p.status===409){
+        throw new Error(id+": файл в GitHub изменился, пока панель его держала. "
+          +"Нажмите «Перечитать из GitHub», внесите правку заново и сохраните.");
+      }
+      if(p.status===403 || p.status===404){
+        throw new Error(id+": нет прав на запись. Токену нужен доступ Contents: Read and write к "+repo);
+      }
+      throw new Error(id+": "+p.status+" "+txt);
+    }
   }
   window.admSavePrompts=async function(){
     AG.forEach(function(a){var el=document.getElementById("admpr-"+a[0]);if(el)prompts[a[0]]=el.value;});
