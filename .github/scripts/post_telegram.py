@@ -45,14 +45,16 @@ text = re.sub(r'^[ \t]*(?:\*\*)?Знаков(?:\*\*)?\s*:[^\n]*$', '', text,
 # Старая строка со ссылкой на картинку — она отправлялась как текст
 text = re.sub(r'\n*-{3,}\n*\s*Иллюстрация\s*:.*$', '', text, flags=re.IGNORECASE | re.DOTALL)
 
-lines = text.split('\n')
-if lines and lines[0].startswith('# '):
-    lines = lines[1:]
-text = '\n'.join(lines).strip()
+# Заголовок публикации сохраняем — раньше первая строка «# …» просто
+# удалялась, и пост в канале начинался сразу с текста.
+text = text.strip()
 text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)
 text = re.sub(r'^#{1,3}\s+(.+)$', r'<b>\1</b>', text, flags=re.MULTILINE)
 text = re.sub(r'^\-\s+', '• ', text, flags=re.MULTILINE)
 text = re.sub(r'\[(.+?)\]\((.+?)\)', r'<a href="\2">\1</a>', text)
+# Слово «Хэштеги:» — служебная метка копирайтера, в канале нужны сами теги
+text = re.sub(r'^[ \t]*(?:<b>)?Хэштеги(?:</b>)?\s*:\s*', '', text,
+              flags=re.MULTILINE | re.IGNORECASE)
 text = re.sub(r'\n{3,}', '\n\n', text).strip()
 
 # ── Ищем картинку, положенную дашбордом рядом с текстом ──
