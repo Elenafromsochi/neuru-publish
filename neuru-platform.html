@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-10-fix38 -->
+<!DOCTYPE html><!-- v2026-09-10-fix39 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -446,7 +446,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 10.09 · fix38</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 10.09 · fix39</div>
   </div>
 </aside>
 
@@ -4455,55 +4455,107 @@ window.runPosting = function(btn){
   });
 };
 
-/* Очередь: сколько постов подготовлено за сегодня и какие уже вышли.
-   Список файлов берём из папки постинга, отметки — из state-dzen.json. */
+/* Очередь: список одобренных публикаций за сегодня — текст и картинка.
+   Файлы берём из папки постинга, отметки об отправке — из state-dzen.json.
+   Картинки подставляем прямой ссылкой: браузер подтянет их сам, без base64,
+   иначе десять снимков по мегабайту пришлось бы качать через API. */
+function postRawUrl(path){
+  return 'https://raw.githubusercontent.com/' + PUB_REPO + '/main/'
+       + path.split('/').map(encodeURIComponent).join('/') + '?_=' + Date.now();
+}
+
+// Из markdown поста делаем заголовок и короткий текст для карточки
+function postSplitMd(md){
+  var lines = String(md||'').split('\n');
+  var title = '';
+  if(lines.length && /^#\s+/.test(lines[0])){
+    title = lines[0].replace(/^#\s+/,'').trim();
+    lines = lines.slice(1);
+  }
+  var body = lines.join('\n').replace(/^[ \t]*Хэштеги\s*:\s*/gim,'').replace(/\n{3,}/g,'\n\n').trim();
+  return { title: title, body: body };
+}
+
 window.loadPostQueue = function(){
   var box = document.getElementById('pub-queue');
   if(!box) return;
   if(!getToken()){
-    box.innerHTML = 'Добавьте GitHub-токен в Админ-панели, чтобы увидеть очередь';
+    box.innerHTML = 'Добавьте GitHub-токен в Админ-панели, чтобы увидеть публикации';
     return;
   }
   var d = mskDMY();
+  var dir = 'social/posting/' + d + '/dzen';
+  box.style.textAlign = 'left';
   box.innerHTML = '<div class="loading" style="justify-content:center"><div class="spinner"></div>Читаю '
-    + 'social/posting/'+d+'/dzen…</div>';
+    + imgEsc(dir) + '…</div>';
 
-  pubFetchAPI('social/posting/'+d+'/dzen', function(status, text){
+  pubFetchAPI(dir, function(status, text){
     if(status !== 200){
-      box.innerHTML = 'За '+d+' постов ещё нет. Одобрите публикации в ИИ-Копирайтере-Публицисте.';
+      box.style.textAlign = 'center';
+      box.innerHTML = 'За ' + d + ' одобренных публикаций нет. '
+        + 'Одобрите их в ИИ-Копирайтере-Публицисте — они появятся здесь.';
       return;
     }
     var files = [];
     try { files = JSON.parse(text) || []; } catch(e){}
-    var posts = files.filter(function(f){ return /^post-\d+\.md$/.test(f.name); })
-                     .map(function(f){ return parseInt(f.name.match(/\d+/)[0], 10); })
-                     .sort(function(a,b){ return a-b; });
-    var withImg = {};
+    var nums = files.filter(function(f){ return /^post-\d+\.md$/.test(f.name); })
+                    .map(function(f){ return parseInt(f.name.match(/\d+/)[0], 10); })
+                    .sort(function(a,b){ return a-b; });
+    var imgByNum = {};
     files.forEach(function(f){
       var m = f.name.match(/^post-(\d+)\.(jpe?g|png|webp)$/i);
-      if(m) withImg[+m[1]] = true;
+      if(m) imgByNum[+m[1]] = dir + '/' + f.name;
     });
-    if(!posts.length){
-      box.innerHTML = 'За '+d+' постов ещё нет. Одобрите публикации в ИИ-Копирайтере-Публицисте.';
+    if(!nums.length){
+      box.style.textAlign = 'center';
+      box.innerHTML = 'За ' + d + ' одобренных публикаций нет.';
       return;
     }
-    pubFetchRaw('social/posting/'+d+'/dzen/state-dzen.json', function(st2, raw){
+
+    pubFetchRaw(dir + '/state-dzen.json', function(st2, raw){
       var done = [];
       if(st2 === 200){ try { done = (JSON.parse(raw)||{}).published || []; } catch(e){} }
-      var rows = posts.map(function(n){
-        var out = done.indexOf(n) >= 0;
-        return '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;'
-          + 'border:1px solid var(--border);margin-bottom:6px;background:'
-          + (out ? 'rgba(16,185,129,.06)' : 'var(--card)') + '">'
-          + '<span style="font-size:14px">'+(out ? '✅' : '🕒')+'</span>'
-          + '<span style="font-size:12px;font-weight:600;color:var(--text)">Публикация '+n+'</span>'
-          + '<span style="font-size:11px;color:var(--muted)">'+(withImg[n] ? 'с картинкой' : 'без картинки')+'</span>'
-          + '<span style="margin-left:auto;font-size:11px;color:'+(out ? '#059669' : 'var(--muted)')+'">'
-          + (out ? 'опубликовано' : 'в очереди') + '</span></div>';
-      }).join('');
-      box.style.textAlign = 'left';
-      box.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">'
-        + d + ' · подготовлено '+posts.length+', опубликовано '+done.length+'</div>' + rows;
+
+      box.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-bottom:14px">'
+        + d + ' · одобрено ' + nums.length + ', опубликовано ' + done.length + '</div>'
+        + nums.map(function(n){
+            return '<div id="pq-' + n + '" style="border:1px solid var(--border);border-radius:12px;'
+              + 'padding:14px 16px;margin-bottom:12px;background:'
+              + (done.indexOf(n) >= 0 ? 'rgba(16,185,129,.05)' : 'var(--card)') + '">'
+              + '<div class="loading" style="padding:6px"><div class="spinner"></div>Публикация ' + n + '…</div>'
+              + '</div>';
+          }).join('');
+
+      // Тексты подтягиваем по одному, чтобы не упереться в лимит запросов
+      (function next(i){
+        if(i >= nums.length) return;
+        var n = nums[i];
+        pubFetchRaw(dir + '/post-' + n + '.md', function(st3, md){
+          var cell = document.getElementById('pq-' + n);
+          if(cell){
+            var out = done.indexOf(n) >= 0;
+            var parts = postSplitMd(st3 === 200 ? md : '');
+            var img = imgByNum[n];
+            cell.innerHTML =
+                '<div style="display:flex;align-items:center;gap:9px;margin-bottom:10px">'
+              + '<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;'
+              + 'color:var(--muted)">Публикация ' + n + '</span>'
+              + '<span style="font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;background:'
+              + (out ? 'rgba(16,185,129,.12);color:#059669' : 'var(--soft);color:var(--blue)') + '">'
+              + (out ? '✅ опубликовано' : '🕒 в очереди') + '</span>'
+              + (img ? '' : '<span style="font-size:11px;color:#D97706">без картинки</span>')
+              + '</div>'
+              + (img ? '<img src="' + postRawUrl(img) + '" alt="Публикация ' + n + '" '
+                     + 'style="width:100%;max-width:420px;border-radius:10px;border:1px solid var(--border);'
+                     + 'margin-bottom:10px;display:block">' : '')
+              + (parts.title ? '<div style="font-size:14px;font-weight:800;color:var(--text);'
+                     + 'margin-bottom:8px;line-height:1.35">' + imgEsc(parts.title) + '</div>' : '')
+              + '<div style="font-size:13px;line-height:1.75;color:var(--text);white-space:pre-line">'
+              + imgEsc(parts.body || 'Текст не прочитан') + '</div>';
+          }
+          next(i + 1);
+        });
+      })(0);
     });
   });
 };
