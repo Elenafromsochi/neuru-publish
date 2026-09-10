@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-10-fix37 -->
+<!DOCTYPE html><!-- v2026-09-10-fix38 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -446,7 +446,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 10.09 · fix37</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 10.09 · fix38</div>
   </div>
 </aside>
 
@@ -779,50 +779,58 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
 <!-- ══ ПУБЛИКАЦИИ: ПОСТИНГ ══ -->
 <section class="section" id="sec-pub-post">
   <div class="sec-title">ИИ-<span>Постинг</span></div>
-  <div class="sec-desc">Управление публикациями. ВКонтакте — автопостинг через API. Остальные платформы — готовый текст для копирования.</div>
+  <div class="sec-desc">Публикация одобренных материалов. ТГ / Дзен выходит автоматически каждый час с 12:00 до 22:00 по Москве; кнопка ниже публикует следующий одобренный пост, не дожидаясь расписания. Остальные площадки пока публикуются вручную.</div>
 
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px">
     <div class="card" style="text-align:center;padding:20px">
+      <div style="font-size:28px;margin-bottom:8px">✈️</div>
+      <div style="font-weight:700;margin-bottom:4px">ТГ / Дзен</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Автопостинг через Telegram Bot API</div>
+      <div style="font-size:11px;color:#10B981;font-weight:600;margin-bottom:12px">● Подключено</div>
+      <button id="post-btn-tgdzen" onclick="runPosting(this)" style="background:var(--grad);color:#fff;border:none;border-radius:9px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">▶ Постинг</button>
+      <div id="post-status-tgdzen" style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5"></div>
+    </div>
+    <div class="card" style="text-align:center;padding:20px;opacity:.55">
       <div style="font-size:28px;margin-bottom:8px">💙</div>
       <div style="font-weight:700;margin-bottom:4px">ВКонтакте</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Автопостинг через VK API</div>
-      <div id="vk-status" style="font-size:11px;color:#10B981;font-weight:600">● Доступен</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Автопостинг пока не подключён</div>
+      <div style="font-size:11px;color:var(--light);font-weight:600">Публикация вручную</div>
     </div>
-    <div class="card" style="text-align:center;padding:20px;opacity:.7">
-      <div style="font-size:28px;margin-bottom:8px">📰</div>
-      <div style="font-weight:700;margin-bottom:4px">Дзен</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Ручная публикация</div>
-      <div style="font-size:11px;color:var(--muted);font-weight:600">Копировать текст</div>
-    </div>
-    <div class="card" style="text-align:center;padding:20px;opacity:.7">
-      <div style="font-size:28px;margin-bottom:8px">🤝</div>
-      <div style="font-weight:700;margin-bottom:4px">Тенчат</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Ручная публикация</div>
-      <div style="font-size:11px;color:var(--muted);font-weight:600">Копировать текст</div>
-    </div>
-    <div class="card" style="text-align:center;padding:20px;opacity:.7">
-      <div style="font-size:28px;margin-bottom:8px">🔷</div>
-      <div style="font-weight:700;margin-bottom:4px">VC.ru</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Ручная публикация</div>
-      <div style="font-size:11px;color:var(--muted);font-weight:600">Копировать текст</div>
-    </div>
-    <div class="card" style="text-align:center;padding:20px;opacity:.7">
+    <div class="card" style="text-align:center;padding:20px;opacity:.55">
       <div style="font-size:28px;margin-bottom:8px">🏨</div>
       <div style="font-weight:700;margin-bottom:4px">MITT Connect</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Ручная публикация</div>
-      <div style="font-size:11px;color:var(--muted);font-weight:600">Копировать текст</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Автопостинг пока не подключён</div>
+      <div style="font-size:11px;color:var(--light);font-weight:600">Публикация вручную</div>
     </div>
-    <div class="card" style="text-align:center;padding:20px;opacity:.7">
+    <div class="card" style="text-align:center;padding:20px;opacity:.55">
       <div style="font-size:28px;margin-bottom:8px">🌟</div>
       <div style="font-weight:700;margin-bottom:4px">Welcome Times</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Ручная публикация</div>
-      <div style="font-size:11px;color:var(--muted);font-weight:600">Копировать текст</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Автопостинг пока не подключён</div>
+      <div style="font-size:11px;color:var(--light);font-weight:600">Публикация вручную</div>
+    </div>
+    <div class="card" style="text-align:center;padding:20px;opacity:.55">
+      <div style="font-size:28px;margin-bottom:8px">🔷</div>
+      <div style="font-weight:700;margin-bottom:4px">VC.ru</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Автопостинг пока не подключён</div>
+      <div style="font-size:11px;color:var(--light);font-weight:600">Публикация вручную</div>
+    </div>
+    <div class="card" style="text-align:center;padding:20px;opacity:.55">
+      <div style="font-size:28px;margin-bottom:8px">🤝</div>
+      <div style="font-weight:700;margin-bottom:4px">ТенЧат</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Автопостинг пока не подключён</div>
+      <div style="font-size:11px;color:var(--light);font-weight:600">Публикация вручную</div>
+    </div>
+    <div class="card" style="text-align:center;padding:20px;opacity:.55">
+      <div style="font-size:28px;margin-bottom:8px">🌐</div>
+      <div style="font-weight:700;margin-bottom:4px">Сайт Тильда</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Автопостинг пока не подключён</div>
+      <div style="font-size:11px;color:var(--light);font-weight:600">Публикация вручную</div>
     </div>
   </div>
 
   <div class="card">
-    <div class="card-hdr"><div class="card-title">📋 Очередь публикаций</div></div>
-    <div id="pub-queue" style="font-size:13px;color:var(--muted);padding:20px;text-align:center">Одобренные статьи появятся здесь</div>
+    <div class="card-hdr"><div class="card-title">📋 Очередь публикаций</div><button onclick="loadPostQueue()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:5px 12px;font-size:11px;cursor:pointer;font-family:inherit;color:var(--muted)">↻ Обновить</button></div>
+    <div id="pub-queue" style="font-size:13px;color:var(--muted);padding:20px;text-align:center">Нажмите «Обновить», чтобы увидеть посты за сегодня</div>
   </div>
 </section>
 
@@ -4339,6 +4347,165 @@ window.imgSaveToGit = function(btn){
   } else {
     put(base+'.md', mdB64, 'постинг: '+s.platform+' пост '+s.num+' за '+s.dateStr, finish);
   }
+};
+
+/* ══ fix38: ИИ-ПОСТИНГ — ТГ / ДЗЕН ══
+   Кнопка «Постинг» дёргает workflow telegram-posting.yml: тот берёт первый
+   неопубликованный пост за сегодня из social/posting/<дата>/dzen и отправляет
+   в канал. То же самое происходит по расписанию каждый час.
+
+   Workflow лежит рядом с постами, то есть в neuru-publish, а не в neuru-email,
+   как остальные агенты. Чтобы не зависеть от того, куда он в итоге положен,
+   репозиторий определяется один раз проверкой через API.                     */
+
+var POST_WF = 'telegram-posting.yml';
+var _postRepo = null;
+
+function postFindRepo(cb){
+  if(_postRepo){ cb(_postRepo); return; }
+  var tok = getToken();
+  var hdr = { 'Authorization':'Bearer '+tok, 'Accept':'application/vnd.github+json' };
+  var candidates = [PUB_REPO, REPO];
+  var i = 0;
+  (function tryNext(){
+    if(i >= candidates.length){ cb(null); return; }
+    var r = candidates[i++];
+    fetch('https://api.github.com/repos/'+r+'/actions/workflows/'+POST_WF, { headers: hdr })
+      .then(function(res){
+        if(res.ok){ _postRepo = r; cb(r); return; }
+        tryNext();
+      }).catch(tryNext);
+  })();
+}
+
+window.runPosting = function(btn){
+  var st = document.getElementById('post-status-tgdzen');
+  var tok = getToken();
+  function say(txt, color){
+    if(st) st.innerHTML = color ? '<span style="color:'+color+'">'+imgEsc(txt)+'</span>' : imgEsc(txt);
+  }
+  if(!tok){ alert('Добавьте GitHub-токен в Админ-панели'); return; }
+
+  var old = btn.textContent;
+  btn.textContent = 'Публикую…'; btn.disabled = true;
+  function stop(){ btn.textContent = old; btn.disabled = false; }
+
+  var hdr = { 'Authorization':'Bearer '+tok, 'Accept':'application/vnd.github+json' };
+  say('Ищу workflow постинга…');
+
+  postFindRepo(function(repo){
+    if(!repo){
+      stop();
+      say('Не нашёл '+POST_WF+' ни в '+PUB_REPO+', ни в '+REPO
+        + '. Проверьте, что файл лежит в .github/workflows, а у токена есть доступ Actions.', '#DC2626');
+      return;
+    }
+    var since = new Date(Date.now()-60000).toISOString();
+    say('Запускаю постинг ('+repo+')…');
+
+    fetch('https://api.github.com/repos/'+repo+'/actions/workflows/'+POST_WF+'/dispatches', {
+      method:'POST',
+      headers: Object.assign({}, hdr, { 'Content-Type':'application/json' }),
+      body: JSON.stringify({ ref:'main' })
+    }).then(function(r){
+      if(r.status !== 204){
+        return r.text().then(function(x){
+          stop();
+          say('Не удалось запустить ('+r.status+'). Нужен токен с правами Actions: Read and write. '
+            + x.slice(0,160), '#DC2626');
+        });
+      }
+      var tries = 0, runId = null;
+      function find(){
+        tries++;
+        if(tries > 60){ stop(); say('Прогон не найден — посмотрите Actions в '+repo, '#D97706'); return; }
+        fetch('https://api.github.com/repos/'+repo+'/actions/workflows/'+POST_WF
+              +'/runs?per_page=5&created=%3E'+since, { headers: hdr })
+          .then(function(r){ return r.ok ? r.json() : null; })
+          .then(function(d){
+            var run = d && d.workflow_runs && d.workflow_runs[0];
+            if(!run){ setTimeout(find, 4000); return; }
+            runId = run.id; watch();
+          }).catch(function(){ setTimeout(find, 5000); });
+      }
+      function watch(){
+        tries++;
+        if(tries > 60){ stop(); say('Идёт дольше обычного — посмотрите Actions', '#D97706'); return; }
+        fetch('https://api.github.com/repos/'+repo+'/actions/runs/'+runId, { headers: hdr })
+          .then(function(r){ return r.ok ? r.json() : null; })
+          .then(function(run){
+            if(!run){ setTimeout(watch, 5000); return; }
+            if(run.status !== 'completed'){
+              say(run.status === 'queued' ? 'В очереди…' : 'Публикую…');
+              setTimeout(watch, 5000); return;
+            }
+            stop();
+            if(run.conclusion === 'success'){
+              say('Опубликовано ✓ Проверьте канал.', '#10B981');
+              loadPostQueue();
+            } else {
+              say('Прогон завершился со статусом «'+run.conclusion+'». Журнал: Actions → Telegram Posting.', '#DC2626');
+            }
+          }).catch(function(){ setTimeout(watch, 6000); });
+      }
+      setTimeout(find, 3000);
+    }).catch(function(e){
+      stop(); say('Сеть недоступна: '+(e && e.message ? e.message : 'ошибка'), '#DC2626');
+    });
+  });
+};
+
+/* Очередь: сколько постов подготовлено за сегодня и какие уже вышли.
+   Список файлов берём из папки постинга, отметки — из state-dzen.json. */
+window.loadPostQueue = function(){
+  var box = document.getElementById('pub-queue');
+  if(!box) return;
+  if(!getToken()){
+    box.innerHTML = 'Добавьте GitHub-токен в Админ-панели, чтобы увидеть очередь';
+    return;
+  }
+  var d = mskDMY();
+  box.innerHTML = '<div class="loading" style="justify-content:center"><div class="spinner"></div>Читаю '
+    + 'social/posting/'+d+'/dzen…</div>';
+
+  pubFetchAPI('social/posting/'+d+'/dzen', function(status, text){
+    if(status !== 200){
+      box.innerHTML = 'За '+d+' постов ещё нет. Одобрите публикации в ИИ-Копирайтере-Публицисте.';
+      return;
+    }
+    var files = [];
+    try { files = JSON.parse(text) || []; } catch(e){}
+    var posts = files.filter(function(f){ return /^post-\d+\.md$/.test(f.name); })
+                     .map(function(f){ return parseInt(f.name.match(/\d+/)[0], 10); })
+                     .sort(function(a,b){ return a-b; });
+    var withImg = {};
+    files.forEach(function(f){
+      var m = f.name.match(/^post-(\d+)\.(jpe?g|png|webp)$/i);
+      if(m) withImg[+m[1]] = true;
+    });
+    if(!posts.length){
+      box.innerHTML = 'За '+d+' постов ещё нет. Одобрите публикации в ИИ-Копирайтере-Публицисте.';
+      return;
+    }
+    pubFetchRaw('social/posting/'+d+'/dzen/state-dzen.json', function(st2, raw){
+      var done = [];
+      if(st2 === 200){ try { done = (JSON.parse(raw)||{}).published || []; } catch(e){} }
+      var rows = posts.map(function(n){
+        var out = done.indexOf(n) >= 0;
+        return '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;'
+          + 'border:1px solid var(--border);margin-bottom:6px;background:'
+          + (out ? 'rgba(16,185,129,.06)' : 'var(--card)') + '">'
+          + '<span style="font-size:14px">'+(out ? '✅' : '🕒')+'</span>'
+          + '<span style="font-size:12px;font-weight:600;color:var(--text)">Публикация '+n+'</span>'
+          + '<span style="font-size:11px;color:var(--muted)">'+(withImg[n] ? 'с картинкой' : 'без картинки')+'</span>'
+          + '<span style="margin-left:auto;font-size:11px;color:'+(out ? '#059669' : 'var(--muted)')+'">'
+          + (out ? 'опубликовано' : 'в очереди') + '</span></div>';
+      }).join('');
+      box.style.textAlign = 'left';
+      box.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">'
+        + d + ' · подготовлено '+posts.length+', опубликовано '+done.length+'</div>' + rows;
+    });
+  });
 };
 
 function approvePost(btn, idx, platform, dateStr){
