@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-10-fix36 -->
+<!DOCTYPE html><!-- v2026-09-10-fix37 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -446,7 +446,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 10.09 · fix36</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 10.09 · fix37</div>
   </div>
 </aside>
 
@@ -4351,8 +4351,14 @@ function approvePost(btn, idx, platform, dateStr){
   allBlocks.forEach(function(block){
     var t = block.trim();
     if(t.length < 50) return;
+    /* fix37: заголовок публикации раньше вырезался вместе со строкой
+       «Публикация N — …», и в Telegram пост уходил без него.
+       Теперь строка не удаляется, а превращается в markdown-заголовок —
+       скрипт постинга сделает из него жирную первую строку. */
     var cleaned = t
-      .replace(/^Публикация\s*[№#]?\s*\d+\s*[—-]\s*[^\n]*\n?/im, '')
+      .replace(/^Публикация\s*[№#]?\s*\d+\s*[—–-]\s*([^\n]*)\n?/im,
+               function(_m, ttl){ ttl = String(ttl||'').replace(/\*\*/g,'').trim();
+                                  return ttl ? '# '+ttl+'\n\n' : ''; })
       .replace(/^(Угол|CTA-тип|Площадка|Формат|Структура|🗒 Постинг|Примечание для постинга)[^\n]*\n?/gim, '')
       .trim();
     if(cleaned.length < 50) return;
