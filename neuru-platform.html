@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-10-fix33 -->
+<!DOCTYPE html><!-- v2026-09-10-fix35 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -446,7 +446,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 10.09 · fix33</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 10.09 · fix35</div>
   </div>
 </aside>
 
@@ -3976,8 +3976,8 @@ function imgStepHtml(){
     +'font-size:12px;line-height:1.65;border:1px solid var(--border);border-radius:10px;padding:10px;'
     +'background:var(--card);color:var(--text);resize:vertical">'+imgEsc(s.prompt)+'</textarea>'
     +'<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'
-    // fix33: было три кнопки, из них две одинаковые. Осталось две разные:
-    // «Улучшить промпт» переписывает текст, «Сгенерировать картинку» рисует по нему.
+    // fix35: было три кнопки, две из них одинаковые — обе звали imgGenPicture.
+    // Осталось две разные: одна переписывает промпт, вторая рисует по нему.
     +'<button onclick="imgGenPrompt(this)" style="background:var(--grad);color:#fff;border:none;border-radius:8px;'
     +'padding:8px 15px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">✨ Улучшить промпт</button>'
     +'<button onclick="imgGenPicture(this)" style="background:#7C3AED;color:#fff;border:none;border-radius:8px;'
@@ -4041,82 +4041,208 @@ window.imgCopyPrompt = function(){
   var t = document.getElementById('img-prompt'); if(!t) return;
   navigator.clipboard.writeText(t.value).then(function(){ alert('Промпт скопирован'); });
 };
-// fix33: здесь была вторая, неиспользуемая реализация imgGenPicture
-// (маршрут /api/image). Её перезаписывала версия ниже — удалена, чтобы
-// не было двух функций с одним именем и двух одинаковых кнопок.
+/* ══ fix35: ИЛЛЮСТРАТОР ЧЕРЕЗ GITHUB ACTIONS ══
+   Раньше эти кнопки ходили в Cloudflare-воркер, где лежали ключи.
+   Теперь они дёргают workflow «Агенты · Иллюстратор» в neuru-email —
+   тот же механизм, что у остальных агентов. Ключи живут только
+   в секретах репозитория, дашборд их не видит и не хранит.
 
-// Генерация картинки через YandexART. Ключ лежит в воркере, не здесь:
-// дашборд открыт всем, класть в него ключи нельзя.
-var ART_PROXY = CLAUDE_PROXY.replace(/\/api\/claude\/?$/, '') + '/api/yandex-art';
+   Схема одна для обеих кнопок:
+   1) запомнить поле updated в social/illustrations/<дата>-<площадка>-<номер>.json
+   2) workflow_dispatch с параметрами
+   3) следить за прогоном: упал — сразу показать ошибку
+   4) опрашивать json, пока updated не изменится
+   5) забрать результат: переписанный промпт или картинку                        */
 
+var ILL_WF = 'agents-illustrate.yml';
+
+function illJsonPath(){
+  var s = _imgStep;
+  return 'social/illustrations/' + s.dateStr + '-' + s.platform + '-' + s.num + '.json';
+}
+
+// Чтение файла из neuru-publish через API (всегда актуальный коммит, без CDN-кэша)
+function illReadPub(path, cb){
+  var tok = getToken();
+  var url = 'https://api.github.com/repos/' + PUB_REPO + '/contents/'
+          + path.split('/').map(encodeURIComponent).join('/') + '?ref=main&_=' + Date.now();
+  var x = new XMLHttpRequest();
+  x.open('GET', url, true);
+  x.timeout = 15000;
+  x.setRequestHeader('Accept', 'application/vnd.github.v3+json');
+  if(tok) x.setRequestHeader('Authorization', 'token ' + tok);
+  x.onreadystatechange = function(){
+    if(x.readyState !== 4) return;
+    if(x.status !== 200){ cb(null, x.status); return; }
+    try {
+      var j = JSON.parse(x.responseText);
+      cb(j.content ? j.content.replace(/\n/g, '') : null, 200);   // сырой base64
+    } catch(e){ cb(null, 0); }
+  };
+  x.ontimeout = function(){ cb(null, 408); };
+  x.send();
+}
+
+function illB64ToText(b64){
+  try { return decodeURIComponent(escape(atob(b64))); }
+  catch(e){ try { return atob(b64); } catch(e2){ return ''; } }
+}
+
+// Общий ход: dispatch → следим за прогоном → ждём обновления json
+function illRun(mode, promptText, st, onDone, onFail){
+  var tok = getToken();
+  if(!tok){ onFail('Добавьте GitHub-токен в Админ-панели'); return; }
+  var hdr = { 'Authorization': 'Bearer ' + tok, 'Accept': 'application/vnd.github+json' };
+  var s = _imgStep;
+
+  function setSt(txt, color){
+    if(st) st.innerHTML = color ? '<span style="color:' + color + '">' + imgEsc(txt) + '</span>' : imgEsc(txt);
+  }
+
+  setSt('Читаю текущее состояние…');
+  illReadPub(illJsonPath(), function(b64){
+    var wasUpdated = '';
+    if(b64){
+      try { wasUpdated = (JSON.parse(illB64ToText(b64)) || {}).updated || ''; } catch(e){}
+    }
+    var since = new Date(Date.now() - 60000).toISOString();
+
+    setSt('Запускаю иллюстратора в GitHub Actions…');
+    fetch('https://api.github.com/repos/' + REPO + '/actions/workflows/' + ILL_WF + '/dispatches', {
+      method: 'POST',
+      headers: Object.assign({}, hdr, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ ref: 'main', inputs: {
+        mode: mode,
+        date: String(s.dateStr),
+        platform: String(s.platform),
+        num: String(s.num),
+        prompt: String(promptText || '')
+      }})
+    }).then(function(r){
+      if(r.status !== 204){
+        return r.text().then(function(x){
+          onFail('Не удалось запустить (' + r.status + '). Проверьте, что ' + ILL_WF
+            + ' лежит в .github/workflows, а у токена есть доступ Actions: Read and write. ' + x.slice(0, 200));
+        });
+      }
+      var tries = 0, runId = null, failed = false;
+
+      // ищем прогон, чтобы поймать падение, а не ждать таймаут вслепую
+      function findRun(){
+        fetch('https://api.github.com/repos/' + REPO + '/actions/workflows/' + ILL_WF
+              + '/runs?per_page=5&created=%3E' + since, { headers: hdr })
+          .then(function(r){ return r.ok ? r.json() : null; })
+          .then(function(d){
+            var run = d && d.workflow_runs && d.workflow_runs[0];
+            if(run) runId = run.id;
+          }).catch(function(){});
+      }
+      function checkRun(){
+        if(!runId){ findRun(); return; }
+        fetch('https://api.github.com/repos/' + REPO + '/actions/runs/' + runId, { headers: hdr })
+          .then(function(r){ return r.ok ? r.json() : null; })
+          .then(function(d){
+            if(d && d.status === 'completed' && d.conclusion !== 'success'){
+              failed = true;
+              onFail('Иллюстратор упал (' + d.conclusion + '). Откройте лог: '
+                + 'Actions → Агенты · Иллюстратор → последний прогон.');
+            }
+          }).catch(function(){});
+      }
+      findRun();
+
+      var maxTries = (mode === 'image') ? 60 : 40;   // 5 и 3.3 минуты
+      (function poll(){
+        if(failed) return;
+        tries++;
+        if(tries > maxTries){
+          onFail('Результат не появился за ' + Math.round(maxTries * 5 / 60) + ' мин. '
+            + 'Посмотрите лог в Actions — возможно, прогон ещё идёт.');
+          return;
+        }
+        setSt((mode === 'image' ? 'YandexART рисует' : 'Иллюстратор переписывает промпт')
+              + '… (' + (tries * 5) + ' с)');
+        if(tries % 3 === 0) checkRun();
+
+        illReadPub(illJsonPath(), function(b64){
+          if(failed) return;
+          if(!b64){ setTimeout(poll, 5000); return; }
+          var j = null;
+          try { j = JSON.parse(illB64ToText(b64)); } catch(e){}
+          if(!j || !j.updated || j.updated === wasUpdated){ setTimeout(poll, 5000); return; }
+          onDone(j);
+        });
+      })();
+    }).catch(function(e){
+      onFail('Сеть недоступна: ' + (e && e.message ? e.message : 'ошибка запроса'));
+    });
+  });
+}
+
+// ── Кнопка «Улучшить промпт» ──
+window.imgGenPrompt = function(btn){
+  var ta = document.getElementById('img-prompt');
+  var st = document.getElementById('img-status');
+  if(!ta) return;
+  var old = btn.textContent;
+  btn.textContent = 'Переписываю…'; btn.disabled = true;
+
+  function stop(){ btn.textContent = old; btn.disabled = false; }
+
+  illRun('prompt', ta.value, st, function(j){
+    stop();
+    if(j.prompt) ta.value = j.prompt;
+    if(st) st.innerHTML = '<span style="color:#10B981">Промпт переписан ('
+      + String(j.prompt || '').length + ' симв.). Проверьте и нажмите «Сгенерировать картинку».</span>';
+    window.imgUpdateReady();
+  }, function(msg){
+    stop();
+    if(st) st.innerHTML = '<span style="color:#DC2626">' + imgEsc(msg) + '</span>';
+  });
+};
+
+// ── Кнопка «Сгенерировать картинку» ──
 window.imgGenPicture = function(btn){
   var ta = document.getElementById('img-prompt');
   var st = document.getElementById('img-status');
   if(!ta || ta.value.trim().length < 20){
-    alert('Сначала напишите или сгенерируйте промпт — по нему рисуется картинка.');
+    alert('Сначала напишите или улучшите промпт — по нему рисуется картинка.');
     return;
   }
   var old = btn.textContent;
-  btn.disabled = true; btn.textContent = 'Рисую…';
-  if(st) st.textContent = 'Отправляю запрос в YandexART…';
+  btn.textContent = 'Рисую…'; btn.disabled = true;
 
-  function fail(msg){
-    btn.disabled = false; btn.textContent = old;
-    if(st) st.innerHTML = '<span style="color:#DC2626">' + imgEsc(String(msg)) + '</span>';
-  }
+  function stop(){ btn.textContent = old; btn.disabled = false; }
 
-  var start = new XMLHttpRequest();
-  start.open('POST', ART_PROXY, true);
-  start.setRequestHeader('Content-Type','application/json');
-  start.onerror = function(){ fail('Сеть недоступна — проверьте адрес воркера: ' + ART_PROXY); };
-  start.onload = function(){
-    var d = null; try{ d = JSON.parse(start.responseText); }catch(e){}
-    if(!d) return fail('Воркер вернул не JSON (код ' + start.status + '): ' + start.responseText.slice(0,200));
-    if(d.error) return fail(d.error);
-    if(!d.id)  return fail('Воркер не вернул id операции');
-
-    var tries = 0;
-    (function poll(){
-      tries++;
-      if(tries > 40) return fail('Картинка не готова за две минуты — попробуйте ещё раз');
-      if(st) st.textContent = 'YandexART рисует… (' + (tries*3) + ' с)';
-      var op = new XMLHttpRequest();
-      op.open('GET', ART_PROXY + '/op?id=' + encodeURIComponent(d.id), true);
-      op.onerror = function(){ setTimeout(poll, 3000); };
-      op.onload = function(){
-        var r = null; try{ r = JSON.parse(op.responseText); }catch(e){}
-        if(!r) return fail('Воркер вернул не JSON при проверке статуса');
-        if(r.error) return fail(r.error);
-        if(!r.done) return setTimeout(poll, 3000);
-
-        _imgStep.imgData = r.image;
-        _imgStep.imgExt  = 'jpg';
-        var pv = document.getElementById('img-preview');
-        if(pv) pv.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Картинка сгенерирована YandexART:</div>'
-          + '<img src="data:image/jpeg;base64,' + r.image + '" style="max-width:100%;border-radius:12px;border:1px solid var(--border)">';
-        if(st) st.innerHTML = '<span style="color:#10B981">Картинка готова — можно отправлять в постинг.</span>';
-        btn.disabled = false; btn.textContent = old;
-        window.imgUpdateReady();
-      };
-      op.send();
-    })();
-  };
-  start.send(JSON.stringify({ prompt: ta.value.trim(), widthRatio: 16, heightRatio: 9 }));
-};
-
-window.imgGenPrompt = function(btn){
-  var ta = document.getElementById('img-prompt'); if(!ta) return;
-  var old = btn.textContent; btn.textContent = 'Генерирую…'; btn.disabled = true;
-  var sys = 'Ты арт-директор. Пишешь промпты для генерации фотореалистичных иллюстраций к статьям '
-    + 'о гостиничном бизнесе. Отвечай ОДНИМ абзацем на русском, без вступлений и списков.';
-  var user = 'Статья:\n' + _imgStep.text.slice(0, 2500)
-    + '\n\nЧерновой промпт от копирайтера:\n' + (ta.value || '(нет)')
-    + '\n\nНапиши улучшенный промпт для иллюстрации: что в кадре, ракурс, свет, настроение, '
-    + 'горизонтальный формат. Без текста и логотипов на изображении, без узнаваемых брендов и лиц знаменитостей.';
-  callClaude(sys, [{role:'user', content:user}], function(reply){
-    ta.value = String(reply||'').trim();
-    btn.textContent = old; btn.disabled = false;
-    window.imgUpdateReady();
+  illRun('image', ta.value.trim(), st, function(j){
+    if(!j.image){
+      stop();
+      if(st) st.innerHTML = '<span style="color:#DC2626">Прогон завершился, но картинки в результате нет. '
+        + 'Посмотрите лог в Actions.</span>';
+      return;
+    }
+    if(st) st.textContent = 'Картинка готова, забираю из репозитория…';
+    illReadPub(j.image, function(b64, code){
+      stop();
+      if(!b64){
+        if(st) st.innerHTML = '<span style="color:#DC2626">Картинка записана в ' + imgEsc(j.image)
+          + ', но скачать её не удалось (код ' + code + ').</span>';
+        return;
+      }
+      var ext = (j.image.split('.').pop() || 'jpg').toLowerCase();
+      _imgStep.imgData = b64;
+      _imgStep.imgExt  = (ext === 'png' ? 'png' : 'jpg');
+      var pv = document.getElementById('img-preview');
+      if(pv) pv.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-bottom:6px">'
+        + 'Картинка от YandexART:</div>'
+        + '<img src="data:image/' + _imgStep.imgExt + ';base64,' + b64
+        + '" style="max-width:100%;border-radius:12px;border:1px solid var(--border)">';
+      if(st) st.innerHTML = '<span style="color:#10B981">Готово — можно отправлять в постинг.</span>';
+      window.imgUpdateReady();
+    });
+  }, function(msg){
+    stop();
+    if(st) st.innerHTML = '<span style="color:#DC2626">' + imgEsc(msg) + '</span>';
   });
 };
 
@@ -4534,6 +4660,9 @@ function generateArticles(){
   callClaude('Ты контент-стратег.',[{role:'user',content:prompt}],function(reply){ var msgs=document.getElementById('interview-messages'); var last=msgs.lastChild; if(last) last.textContent=reply; showSec('pub-copy',null); });
 }
 
+/* Воркер остался нужен только двум местам: ИИ-Интервьюеру (живой диалог,
+   через Actions было бы по минуте на реплику) и распознаванию скриншотов
+   в Аналитике. Иллюстратор с fix35 работает через Actions и сюда не заходит. */
 function callClaude(systemPrompt,messages,callback){
   var payload={model:'claude-sonnet-4-6',max_tokens:2000,system:systemPrompt,messages:messages};
   var xhr=new XMLHttpRequest();
@@ -4551,17 +4680,14 @@ function callClaude(systemPrompt,messages,callback){
     if(text){ callback(String(text)); return; }
     // Ответ есть, но текста в нём нет — показываем, что именно пришло
     var err = (json.error && (json.error.message || json.error.type)) || json.message || '';
-    // fix33: 401 — это ответ самого Anthropic, пришедший через воркер.
-    // Ключ живёт в Cloudflare, в дашборде его нет, поэтому объясняем прямо.
-    var isAuth = xhr.status === 401 || xhr.status === 403
-      || (json.error && json.error.type === 'authentication_error')
-      || /api key/i.test(err);
-    if(isAuth){
-      callback('Ключ Anthropic в Cloudflare-воркере недействителен (код '+xhr.status+': '+err+').\n\n'
-        + 'Дашборд ключи не хранит — он только обращается к воркеру '+CLAUDE_PROXY+'.\n'
-        + 'Обновить ключ: Cloudflare → Workers & Pages → neuru-proxy → Settings → '
-        + 'Variables and Secrets → ANTHROPIC_API_KEY, затем Deploy.\n'
-        + 'Поле «API-ключ» в Админ-панели на этот запрос не влияет.');
+    // fix35: 401/403 — это ответ провайдера, пришедший через воркер, а не сбой дашборда
+    if(xhr.status===401 || xhr.status===403){
+      callback('Ключ в Cloudflare-воркере недействителен (код '+xhr.status+').\n\n'
+        + 'Дашборд ключи не хранит — он только обращается к воркеру. Поменять ключ: '
+        + 'Cloudflare → Workers & Pages → neuru-proxy → Settings → Variables and Secrets → Deploy.\n\n'
+        + 'Эта кнопка — одна из двух, что ещё ходят через воркер. Иллюстратор и все агенты '
+        + 'работают через GitHub Actions и от него не зависят.'
+        + (err ? '\n\nОтвет провайдера: '+err : ''));
       return;
     }
     callback('Прокси ответил без текста (код '+xhr.status+')'
