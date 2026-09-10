@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-10-fix35 -->
+<!DOCTYPE html><!-- v2026-09-10-fix36 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -446,7 +446,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 10.09 · fix35</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 10.09 · fix36</div>
   </div>
 </aside>
 
@@ -3784,6 +3784,16 @@ function pcpyStripService(x){
     .trim();
 }
 
+/* fix36: то же, что pcpyStripService, но хэштеги сохраняются —
+   для публикации в Дзене и ВК они часть поста. */
+function pcpyStripKeepTags(x){
+  return String(x||'')
+    .replace(/^[ \t]*(?:\*\*)?Промпт\s+для\s+картинки(?:\*\*)?\s*:[\s\S]*?(?=\n[ \t]*\n|$)/gim, '')
+    .replace(/^[ \t]*(?:\*\*)?Знаков(?:\*\*)?\s*:[^\n]*$/gim, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function copyRenderPlatform(platform, md){
   var body = document.getElementById('copy-body');
   var label = PCPY_PLATFORM_LABELS[platform]||platform;
@@ -4263,9 +4273,19 @@ window.imgSaveToGit = function(btn){
   var imgPath = s.imgData ? (base+'.'+s.imgExt) : '';
   var prompt  = (document.getElementById('img-prompt')||{}).value || '';
 
-  var md = s.text.replace(/\*\*([^*]+)\*\*/g,'$1').replace(/\n{3,}/g,'\n\n').trim();
-  if(imgPath) md += '\n\n---\n\nИллюстрация: ![post-'+s.num+'](post-'+s.num+'.'+s.imgExt+')';
-  else if(prompt) md += '\n\n---\n\nПромпт для иллюстрации (картинка не приложена):\n'+prompt;
+  /* fix36: в постинг уходит только то, что публикуется.
+     Промпт для картинки и счётчик знаков — рабочие поля копирайтера,
+     раньше они улетали в Telegram вместе с текстом. Хэштеги оставляем:
+     в Дзене и ВК они нужны. Строку «Иллюстрация: ![…]» больше не дописываем —
+     скрипт постинга отправлял её как текст, а не как картинку. */
+  var md = pcpyStripKeepTags(s.text)
+    .replace(/\*\*([^*]+)\*\*/g,'$1')
+    .replace(/\n{3,}/g,'\n\n')
+    .trim();
+  if(!imgPath && prompt){
+    // Картинки нет — оставляем промпт отдельным файлом, а не в тексте поста
+    prompt = prompt.trim();
+  }
 
   function put(path, contentB64, msg, next){
     var url = 'https://api.github.com/repos/'+PUB_REPO+'/contents/'
@@ -4304,6 +4324,11 @@ window.imgSaveToGit = function(btn){
   }
 
   var mdB64 = btoa(unescape(encodeURIComponent(md)));
+  // fix36: промпт кладём отдельным файлом — он нужен, но не в тексте поста
+  if(!imgPath && prompt){
+    put(base+'-prompt.txt', btoa(unescape(encodeURIComponent(prompt))),
+        'постинг: промпт картинки '+s.platform+' пост '+s.num, function(){});
+  }
   if(imgPath){
     if(st) st.textContent = 'Загружаю картинку…';
     put(imgPath, s.imgData, 'постинг: картинка '+s.platform+' пост '+s.num+' за '+s.dateStr, function(e){
