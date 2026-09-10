@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-10-fix39 -->
+<!DOCTYPE html><!-- v2026-09-10-fix40 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -446,7 +446,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 10.09 · fix39</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 10.09 · fix40</div>
   </div>
 </aside>
 
@@ -829,8 +829,8 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
   </div>
 
   <div class="card">
-    <div class="card-hdr"><div class="card-title">📋 Очередь публикаций</div><button onclick="loadPostQueue()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:5px 12px;font-size:11px;cursor:pointer;font-family:inherit;color:var(--muted)">↻ Обновить</button></div>
-    <div id="pub-queue" style="font-size:13px;color:var(--muted);padding:20px;text-align:center">Нажмите «Обновить», чтобы увидеть посты за сегодня</div>
+    <div class="card-hdr"><div class="card-title">📋 Одобренные публикации — ТГ / Дзен</div><button onclick="loadPostQueue()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:5px 12px;font-size:11px;cursor:pointer;font-family:inherit;color:var(--muted)">↻ Обновить</button></div>
+    <div id="pub-queue" style="font-size:13px;color:var(--muted);padding:20px;text-align:center"><div class="loading" style="justify-content:center"><div class="spinner"></div>Загрузка…</div></div>
   </div>
 </section>
 
@@ -2134,6 +2134,8 @@ function showSec(id, el){
   if(el) el.classList.add('active');
   if(id==='strategy') loadStrategy();
   if(id==='analytics'){ loadAnWeekList(); }
+  // fix40: список одобренных публикаций подтягивается сразу при входе
+  if(id==='pub-post' && window.loadPostQueue) loadPostQueue();
 }
 
 /* ══ МОСКОВСКОЕ ВРЕМЯ — ЕДИНЫЙ ИСТОЧНИК ДАТ (fix31) ══
