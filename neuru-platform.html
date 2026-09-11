@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-11-fix44 -->
+<!DOCTYPE html><!-- v2026-09-11-fix45 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -446,7 +446,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 11.09 · fix44</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 11.09 · fix45</div>
   </div>
 </aside>
 
@@ -3886,7 +3886,8 @@ function copyRenderPlatform(platform, md){
       .replace(/^(Угол|CTA-тип|Площадка|Формат|Структура|🗒 Постинг|Примечание для постинга)[^\n]*\n?/gim, '')
       .trim();
     if(cleaned.length < 50) return;
-    articles.push({ title: artTitle, body: cleaned });
+    // fix45: raw — блок как он лежит в файле, по нему идёт правка и запись
+    articles.push({ title: artTitle, body: cleaned, raw: t, num: head ? head[0].match(/\d+/)[0] : String(articles.length+1) });
   });
 
   // Если заголовок не найден в первом блоке — ищем в начале файла
@@ -3923,7 +3924,7 @@ function copyRenderPlatform(platform, md){
     // Заголовок из строки «Публикация N — …»; если её нет — из markdown-заголовка
     var title = art.title || (titleMatch ? titleMatch[1].replace(/\*\*/g,'').trim() : '');
     var artBody = titleMatch ? raw.replace(titleMatch[0], '').trim() : raw;
-    artBody = pcpyStripService(artBody);   // fix32: прячем служебные поля
+    artBody = pcpyStripKeepTags(artBody);   // fix45: хэштеги показываем, промпт и счётчик — нет
 
     html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px 22px;margin-bottom:20px">'
       +'<div style="font-size:10px;color:var(--muted);margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:.06em">Публикация '+(i+1)+'</div>'
@@ -3936,7 +3937,9 @@ function copyRenderPlatform(platform, md){
       +'<button style="background:var(--grad);color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit" onclick="copyFullText(this,'+i+',\''+platform+'\',\''+copyCalSelected+'\')">📋 Скопировать</button>'
       +'<button id="approve-'+platform+'-'+i+'" style="background:#059669;color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit" onclick="approvePost(this,'+i+',\''+platform+'\',\''+copyCalSelected+'\')">Одобрить</button>'
       +'<button id="expand-'+platform+'-'+i+'" style="background:none;border:1px solid var(--border);border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--muted)" onclick="(function(){ var b=document.getElementById(\'art-body-'+platform+'-'+i+'\'); b.style.maxHeight=\'none\'; var f=document.getElementById(\'art-fade-'+platform+'-'+i+'\'); if(f) f.style.display=\'none\'; document.getElementById(\'expand-'+platform+'-'+i+'\').style.display=\'none\'; })()">Развернуть ↓</button>'
+      +'<button id="edit-'+platform+'-'+i+'" style="background:none;border:1px solid var(--border);border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--blue)" onclick="copyEditStart('+i+',\''+platform+'\')">✏️ Редактировать</button>'
       +'</div>'
+      +'<div id="edit-box-'+platform+'-'+i+'" style="display:none;margin-top:14px"></div>'
       +'</div>';
   });
 
@@ -3954,8 +3957,145 @@ function copyRenderPlatform(platform, md){
 
   body.innerHTML = html;
   window._copyArticles = articles.map(function(a){ return a.body; });
+  window._copyRaw = articles;          // fix45: сырые блоки для правки и записи
+  window._copyRawCtx = { platform: platform, dateStr: copyCalSelected };
 }
 
+
+/* ══ fix45: ПРАВКА ПУБЛИКАЦИИ ПРЯМО В ПАНЕЛИ ══
+   Редактируется блок публикации так, как он лежит в файле —
+   вместе с хэштегами, промптом картинки и счётчиком знаков. Так сохранение
+   получается точным: панель заменяет в файле ровно один блок, не пересобирая
+   остальные. Файл перед записью читается заново, чтобы не перетереть правку,
+   сделанную в GitHub или другим агентом. */
+
+window.copyEditStart = function(idx, platform){
+  var art = (window._copyRaw || [])[idx];
+  var box = document.getElementById('edit-box-'+platform+'-'+idx);
+  if(!art || !box) return;
+  if(box.style.display === 'block'){ box.style.display = 'none'; return; }
+
+  box.style.display = 'block';
+  box.innerHTML =
+      '<div style="font-size:11px;color:var(--muted);margin-bottom:7px;line-height:1.5">'
+    + 'Блок публикации целиком, как в файле. Правьте текст, заголовок, хэштеги '
+    + 'и промпт картинки. Строку «Публикация '+art.num+' — …» не удаляйте: по ней '
+    + 'публикация находится в файле.</div>'
+    + '<textarea id="edit-ta-'+platform+'-'+idx+'" style="width:100%;box-sizing:border-box;'
+    + 'min-height:320px;font-family:inherit;font-size:13px;line-height:1.7;color:var(--text);'
+    + 'background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;'
+    + 'resize:vertical">' + escHtml(art.raw) + '</textarea>'
+    + '<div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;align-items:center">'
+    + '<button onclick="copyEditSave(this,'+idx+',\'' + platform + '\')" '
+    + 'style="background:var(--grad);color:#fff;border:none;border-radius:8px;padding:8px 18px;'
+    + 'font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Сохранить в GitHub</button>'
+    + '<button onclick="copyEditStart('+idx+',\'' + platform + '\')" '
+    + 'style="background:none;border:1px solid var(--border);border-radius:8px;padding:8px 16px;'
+    + 'font-size:12px;cursor:pointer;font-family:inherit;color:var(--text)">Отмена</button>'
+    + '<span id="edit-st-'+platform+'-'+idx+'" style="font-size:11px;color:var(--muted)"></span>'
+    + '</div>';
+};
+
+// Запись файла в neuru-publish: sha читаем с обходом кэша, при 409 — один повтор
+function pubPutFile(path, text, message, cb){
+  var tok = getToken();
+  if(!tok){ cb('Добавьте GitHub-токен в Админ-панели'); return; }
+  var url = 'https://api.github.com/repos/' + PUB_REPO + '/contents/'
+          + path.split('/').map(encodeURIComponent).join('/');
+  var hdr = { 'Authorization':'token '+tok, 'Accept':'application/vnd.github.v3+json' };
+
+  function attempt(left){
+    fetch(url + '?ref=main&_=' + Date.now(), { headers: hdr })
+      .then(function(r){ return r.status === 200 ? r.json() : null; })
+      .then(function(cur){
+        var body = { message: message, branch: 'main',
+                     content: btoa(unescape(encodeURIComponent(text))) };
+        if(cur && cur.sha) body.sha = cur.sha;
+        return fetch(url, { method:'PUT',
+          headers: Object.assign({}, hdr, { 'Content-Type':'application/json' }),
+          body: JSON.stringify(body) });
+      })
+      .then(function(r){
+        if(r.status === 200 || r.status === 201){ cb(null); return; }
+        if(r.status === 409 && left > 0){ attempt(left - 1); return; }
+        return r.text().then(function(t){
+          if(r.status === 403 || r.status === 404){
+            cb('Нет прав на запись. Токену нужен доступ Contents: Read and write к ' + PUB_REPO);
+          } else {
+            cb('GitHub ответил ' + r.status + ': ' + t.slice(0, 160));
+          }
+        });
+      })
+      .catch(function(e){ cb('Сеть недоступна: ' + (e && e.message ? e.message : 'ошибка')); });
+  }
+  attempt(1);
+}
+
+window.copyEditSave = function(btn, idx, platform){
+  var ta = document.getElementById('edit-ta-'+platform+'-'+idx);
+  var st = document.getElementById('edit-st-'+platform+'-'+idx);
+  var art = (window._copyRaw || [])[idx];
+  if(!ta || !art) return;
+  var dateStr = (window._copyRawCtx || {}).dateStr || copyCalSelected;
+  if(!dateStr){ alert('Не выбрана дата'); return; }
+
+  var edited = ta.value.trim();
+  if(edited.length < 50){
+    if(st) st.innerHTML = '<span style="color:#DC2626">Текст слишком короткий — не сохраняю</span>';
+    return;
+  }
+  if(!/Публикация\s*[№#]?\s*\d+/i.test(edited)){
+    if(st) st.innerHTML = '<span style="color:#DC2626">Пропала строка «Публикация N — …». '
+      + 'Без неё публикация не найдётся в файле.</span>';
+    return;
+  }
+
+  var old = btn.textContent;
+  btn.textContent = 'Сохраняю…'; btn.disabled = true;
+  function stop(){ btn.textContent = old; btn.disabled = false; }
+  if(st) st.textContent = 'Читаю файл…';
+
+  var path = 'social/copy/copy-' + dateStr + '-' + platform + '.md';
+  pubFetchRaw(path, function(status, md){
+    if(status !== 200 || !md){
+      stop();
+      if(st) st.innerHTML = '<span style="color:#DC2626">Не удалось прочитать '
+        + imgEsc(path) + ' (код ' + status + ')</span>';
+      return;
+    }
+    // Ищем блок этой публикации в свежей версии файла — по номеру, а не по позиции
+    var blocks = md.split('\n---\n');
+    var target = -1;
+    for(var i = 0; i < blocks.length; i++){
+      var m = blocks[i].trim().match(/^Публикация\s*[№#]?\s*(\d+)/im);
+      if(m && m[1] === String(art.num)){ target = i; break; }
+    }
+    if(target < 0){
+      stop();
+      if(st) st.innerHTML = '<span style="color:#DC2626">В файле не нашлась публикация '
+        + imgEsc(art.num) + ' — возможно, файл переписан агентом. Обновите страницу.</span>';
+      return;
+    }
+    // Сохраняем отступы блока такими же, как у остальных
+    blocks[target] = '\n' + edited + '\n';
+    var updated = blocks.join('\n---\n');
+
+    if(st) st.textContent = 'Записываю…';
+    pubPutFile(path, updated,
+      'правка: ' + platform + ' публикация ' + art.num + ' за ' + dateStr,
+      function(err){
+        stop();
+        if(err){
+          if(st) st.innerHTML = '<span style="color:#DC2626">' + imgEsc(err) + '</span>';
+          return;
+        }
+        if(st) st.innerHTML = '<span style="color:#10B981">Сохранено ✓ перечитываю…</span>';
+        // Сбрасываем память и перерисовываем из свежего файла
+        if(_copyPlatformCache[dateStr]) delete _copyPlatformCache[dateStr][platform];
+        setTimeout(function(){ copyLoadPlatform(dateStr, platform); }, 800);
+      });
+  });
+};
 
 // ═══ ШАГ ИЛЛЮСТРАЦИИ перед отправкой в постинг ═══
 var _imgStep = null;   // {text, platform, dateStr, num, btn, imgData, imgExt, prompt}
