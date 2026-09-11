@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-11-fix47 -->
+<!DOCTYPE html><!-- v2026-09-11-fix48 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -446,7 +446,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 11.09 · fix47</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 11.09 · fix48</div>
   </div>
 </aside>
 
@@ -4410,7 +4410,10 @@ function illRun(mode, promptText, st, onDone, onFail){
             + 'Посмотрите лог в Actions — возможно, прогон ещё идёт.');
           return;
         }
-        setSt((mode === 'image' ? 'YandexART рисует' : 'Иллюстратор переписывает промпт')
+        // fix48: генератор берём из настройки, а не из зашитого текста
+        setSt((mode === 'image'
+                ? ((illImgInputs('image').img_provider === 'openai' ? 'OpenAI' : 'YandexART') + ' рисует')
+                : 'Иллюстратор переписывает промпт')
               + '… (' + (tries * 5) + ' с)');
         if(tries % 3 === 0) checkRun();
 
@@ -4482,9 +4485,14 @@ window.imgGenPicture = function(btn){
       var ext = (j.image.split('.').pop() || 'jpg').toLowerCase();
       _imgStep.imgData = b64;
       _imgStep.imgExt  = (ext === 'png' ? 'png' : 'jpg');
+      /* fix48: подпись была жёстко зашита как «Картинка от YandexART» —
+         осталась с тех пор, когда генератор был один. Теперь берём из файла
+         результата: агент пишет туда provider, model и size. */
+      var made = j.provider === 'openai' ? 'OpenAI' : (j.provider === 'yandex' ? 'YandexART' : 'генератор не указан');
+      var madeInfo = made + (j.model ? ' · ' + j.model : '') + (j.size ? ' · ' + j.size : '');
       var pv = document.getElementById('img-preview');
       if(pv) pv.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-bottom:6px">'
-        + 'Картинка от YandexART:</div>'
+        + 'Нарисовано: ' + imgEsc(madeInfo) + '</div>'
         + '<img src="data:image/' + _imgStep.imgExt + ';base64,' + b64
         + '" style="max-width:100%;border-radius:12px;border:1px solid var(--border)">';
       if(st) st.innerHTML = '<span style="color:#10B981">Готово — можно отправлять в постинг.</span>';
