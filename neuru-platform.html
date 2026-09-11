@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-11-fix45 -->
+<!DOCTYPE html><!-- v2026-09-11-fix47 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -446,7 +446,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 11.09 · fix45</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 11.09 · fix47</div>
   </div>
 </aside>
 
@@ -868,6 +868,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
   <div class="adm-tabs">
     <button class="adm-tab on" data-t="prompts">Промпты</button>
     <button class="adm-tab" data-t="provider">Провайдер ИИ</button>
+    <button class="adm-tab" data-t="images">Картинки</button>
     <button class="adm-tab" data-t="logo">Логотип</button>
     <button class="adm-tab" data-t="tokens">Токены</button>
   </div>
@@ -889,6 +890,25 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     <div class="adm-hint" id="adm-keyhint"></div>
     <label>Модель</label><input type="text" id="adm-model" placeholder="например, claude-sonnet-4-6">
     <div class="adm-row end"><button class="adm-btn" onclick="admSaveProvider()">Сохранить провайдера</button></div>
+  </div>
+
+  <div class="adm-pane" id="adm-images">
+    <p class="adm-hint">Чем рисуются иллюстрации к публикациям. Ключи здесь не хранятся —
+      они лежат в секретах репозитория neuru-email. Выбор передаётся агенту при запуске.</p>
+    <div class="adm-provs" id="adm-imggrid"></div>
+
+    <label>Модель</label>
+    <input type="text" id="adm-imgmodel" placeholder="например, gpt-image-1.5">
+    <div class="adm-hint" id="adm-imghint"></div>
+
+    <label>Размер кадра</label>
+    <div class="adm-provs" id="adm-imgsizes" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr))"></div>
+
+    <label>Качество <span style="font-weight:400;color:var(--muted)">— только OpenAI</span></label>
+    <div class="adm-provs" id="adm-imgquality" style="grid-template-columns:repeat(auto-fit,minmax(100px,1fr))"></div>
+
+    <div class="adm-note" id="adm-imgnote"></div>
+    <div class="adm-row end"><button class="adm-btn" onclick="admSaveImages()">Сохранить генератор</button></div>
   </div>
 
   <div class="adm-pane" id="adm-logo">
@@ -4131,6 +4151,14 @@ window.closeImageStep = function(){
   document.removeEventListener('paste', imgOnPaste);
 };
 
+// Подпись в модалке: чем будет нарисована картинка
+function imgGenLabel(){
+  var c = {};
+  try { c = JSON.parse(localStorage.getItem('neuru_imggen') || '{}'); } catch(e){}
+  var prov = (c.provider === 'openai') ? 'OpenAI' : 'YandexART';
+  return imgEsc(prov + ' · ' + (c.model || 'по умолчанию') + ' · ' + (c.size || '1024x1024'));
+}
+
 function imgStepHtml(){
   var s = _imgStep;
   var card = 'background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-bottom:14px';
@@ -4170,7 +4198,10 @@ function imgStepHtml(){
     +'padding:8px 15px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:8px">🎨 Сгенерировать картинку</button>'
     +'<button onclick="imgCopyPrompt()" style="background:none;border:1px solid var(--border);border-radius:8px;'
     +'padding:8px 15px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--text)">Скопировать</button>'
-    +'</div></div>'
+    +'</div>'
+    +'<div style="font-size:11px;color:var(--muted);margin-top:8px">Рисует: '+imgGenLabel()
+    +'. Сменить — Админ-панель → Картинки.</div>'
+    +'</div>'
 
     +'<div id="img-preview" style="margin-bottom:14px"></div>'
     +'<div id="img-status" style="font-size:12px;color:var(--muted);margin-bottom:12px"></div>'
@@ -4242,6 +4273,19 @@ window.imgCopyPrompt = function(){
 
 var ILL_WF = 'agents-illustrate.yml';
 
+/* fix47: какой генератор картинок выбран в Админ-панели → Картинки.
+   Для режима prompt это не нужно: там работает только текстовая модель. */
+function illImgInputs(mode){
+  if(mode !== 'image') return {};
+  var c = {};
+  try { c = JSON.parse(localStorage.getItem('neuru_imggen') || '{}'); } catch(e){}
+  var out = { img_provider: c.provider || 'yandex' };
+  if(c.model)   out.img_model   = String(c.model);
+  if(c.size)    out.img_size    = String(c.size);
+  if(c.quality) out.img_quality = String(c.quality);
+  return out;
+}
+
 function illJsonPath(){
   var s = _imgStep;
   return 'social/illustrations/' + s.dateStr + '-' + s.platform + '-' + s.num + '.json';
@@ -4262,7 +4306,27 @@ function illReadPub(path, cb){
     if(x.status !== 200){ cb(null, x.status); return; }
     try {
       var j = JSON.parse(x.responseText);
-      cb(j.content ? j.content.replace(/\n/g, '') : null, 200);   // сырой base64
+      if(j.content) { cb(j.content.replace(/\n/g, ''), 200); return; }
+      /* fix46: для файлов больше 1 МБ GitHub отвечает 200, но content оставляет
+         пустым — картинки от YandexART как раз такие (около 1,2 МБ).
+         Забираем по прямой ссылке из того же ответа и переводим в base64. */
+      if(j.download_url){
+        fetch(j.download_url + (j.download_url.indexOf('?') < 0 ? '?' : '&') + '_=' + Date.now())
+          .then(function(r){ return r.ok ? r.blob() : null; })
+          .then(function(b){
+            if(!b){ cb(null, 0); return; }
+            var fr = new FileReader();
+            fr.onload = function(){
+              var d = String(fr.result || '');
+              cb(d.indexOf(',') >= 0 ? d.split(',')[1] : null, 200);
+            };
+            fr.onerror = function(){ cb(null, 0); };
+            fr.readAsDataURL(b);
+          })
+          .catch(function(){ cb(null, 0); });
+        return;
+      }
+      cb(null, 200);
     } catch(e){ cb(null, 0); }
   };
   x.ontimeout = function(){ cb(null, 408); };
@@ -4297,13 +4361,13 @@ function illRun(mode, promptText, st, onDone, onFail){
     fetch('https://api.github.com/repos/' + REPO + '/actions/workflows/' + ILL_WF + '/dispatches', {
       method: 'POST',
       headers: Object.assign({}, hdr, { 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ ref: 'main', inputs: {
+      body: JSON.stringify({ ref: 'main', inputs: Object.assign({
         mode: mode,
         date: String(s.dateStr),
         platform: String(s.platform),
         num: String(s.num),
         prompt: String(promptText || '')
-      }})
+      }, illImgInputs(mode)) })
     }).then(function(r){
       if(r.status !== 204){
         return r.text().then(function(x){
@@ -4463,11 +4527,14 @@ window.imgSaveToGit = function(btn){
     prompt = prompt.trim();
   }
 
-  function put(path, contentB64, msg, next){
+  /* fix46: раньше sha читался без обхода кэша, Safari отдавал сохранённый
+     ответ, и GitHub отвечал «is at <sha> but expected <sha>». Теперь запрос
+     версии идёт с &_=timestamp, а при конфликте делается один повтор. */
+  function put(path, contentB64, msg, next, retry){
     var url = 'https://api.github.com/repos/'+PUB_REPO+'/contents/'
             + path.split('/').map(encodeURIComponent).join('/');
     var g = new XMLHttpRequest();
-    g.open('GET', url+'?ref=main', true);
+    g.open('GET', url+'?ref=main&_='+Date.now(), true);
     g.setRequestHeader('Authorization','token '+tok);
     g.onreadystatechange = function(){
       if(g.readyState!==4) return;
@@ -4480,8 +4547,12 @@ window.imgSaveToGit = function(btn){
       p.setRequestHeader('Content-Type','application/json');
       p.onreadystatechange = function(){
         if(p.readyState!==4) return;
-        if(p.status===200||p.status===201) next(null);
-        else { var e2='HTTP '+p.status; try{ e2 = JSON.parse(p.responseText).message; }catch(e){} next(e2); }
+        if(p.status===200||p.status===201){ next(null); return; }
+        if(p.status===409 && !retry){ put(path, contentB64, msg, next, true); return; }
+        var e2='HTTP '+p.status;
+        try{ e2 = JSON.parse(p.responseText).message; }catch(e){}
+        if(p.status===409) e2 = 'файл в репозитории изменился между чтением и записью — повторите отправку';
+        next(e2);
       };
       p.send(JSON.stringify(body));
     };
@@ -6339,6 +6410,104 @@ function renderAnMd(text){
   };
   window.admSaveProvider=function(){provider.key=document.getElementById("adm-key").value;provider.model=document.getElementById("adm-model").value;SS("neuru_provider",provider);admToast("Провайдер сохранён");};
 
+  /* ══ fix47: ГЕНЕРАТОР КАРТИНОК ══
+     Выбор хранится в браузере и передаётся агенту-иллюстратору параметрами
+     при запуске. Ключи остаются в секретах репозитория: дашборд лежит
+     на публичном GitHub Pages, ключам тут не место. */
+  var IMG_PROVS=[
+    ["yandex","YandexART","yandex-art-2.0/latest","rub",
+     "Ключ и каталог Yandex Cloud: секреты YANDEX_API_KEY и YANDEX_FOLDER_ID. Рубли, без VPN."],
+    ["openai","OpenAI GPT Image","gpt-image-1.5","usd",
+     "Ключ с platform.openai.com: секрет OPENAI_API_KEY. Оплата в валюте. DALL·E из API убран в мае 2026, живы только модели GPT Image."]
+  ];
+  var IMG_MODELS={
+    yandex:["yandex-art-2.0/latest","alice-art/latest"],
+    openai:["gpt-image-1.5","gpt-image-2","gpt-image-1-mini"]
+  };
+  var IMG_SIZES=[
+    ["1536x1024","горизонтальный"],
+    ["1024x1024","квадрат"],
+    ["1024x1536","вертикальный"]
+  ];
+  var IMG_QUALITY=[["low","дешевле"],["medium","обычное"],["high","дороже"]];
+
+  var imgCfg=S("neuru_imggen",{provider:"yandex",model:"yandex-art-2.0/latest",
+                               size:"1024x1024",quality:"medium"});
+
+  function imgProvRow(){
+    var g=document.getElementById("adm-imggrid"); if(!g) return; g.innerHTML="";
+    IMG_PROVS.forEach(function(p){
+      var el=document.createElement("div");
+      el.className="adm-prov"+(imgCfg.provider===p[0]?" sel":"");
+      el.innerHTML='<span class="pb '+(p[3]==="rub"?"pb-rub":"pb-usd")+'">'
+        +(p[3]==="rub"?"₽ рубли":"$ валюта")+'</span>'
+        +'<div class="pn">'+p[1]+'</div><div class="pm">'+p[2]+'</div>';
+      el.onclick=function(){
+        imgCfg.provider=p[0];
+        imgCfg.model=p[2];
+        // У OpenAI горизонтальный кадр поддерживается штатно, у Яндекса — нет
+        imgCfg.size = p[0]==="openai" ? "1536x1024" : "1024x1024";
+        admRenderImages();
+      };
+      g.appendChild(el);
+    });
+  }
+
+  function imgPickRow(id, list, current, onPick){
+    var g=document.getElementById(id); if(!g) return; g.innerHTML="";
+    list.forEach(function(item){
+      var val=item[0], note=item[1];
+      var el=document.createElement("div");
+      el.className="adm-prov"+(current===val?" sel":"");
+      el.style.padding="11px";
+      el.innerHTML='<div class="pn" style="font-size:13px">'+val+'</div>'
+        +(note?'<div class="pm">'+note+'</div>':'');
+      el.onclick=function(){ onPick(val); admRenderImages(); };
+      g.appendChild(el);
+    });
+  }
+
+  window.admRenderImages=function(){
+    if(!document.getElementById("adm-imggrid")) return;
+    imgProvRow();
+    var cur=IMG_PROVS.filter(function(p){ return p[0]===imgCfg.provider; })[0]||IMG_PROVS[0];
+    var hint=document.getElementById("adm-imghint");
+    if(hint) hint.textContent=cur[4]+" Доступные модели: "+(IMG_MODELS[imgCfg.provider]||[]).join(", ")+".";
+    var mi=document.getElementById("adm-imgmodel");
+    if(mi) mi.value=imgCfg.model||cur[2];
+    imgPickRow("adm-imgsizes", IMG_SIZES, imgCfg.size, function(v){ imgCfg.size=v; });
+    var q=document.getElementById("adm-imgquality");
+    if(q){
+      if(imgCfg.provider==="openai"){
+        q.style.opacity="1"; q.style.pointerEvents="auto";
+        imgPickRow("adm-imgquality", IMG_QUALITY, imgCfg.quality, function(v){ imgCfg.quality=v; });
+      } else {
+        q.style.opacity=".4"; q.style.pointerEvents="none";
+        imgPickRow("adm-imgquality", IMG_QUALITY, imgCfg.quality, function(){});
+      }
+    }
+    var note=document.getElementById("adm-imgnote");
+    if(note){
+      note.innerHTML = imgCfg.provider==="openai"
+        ? "Для OpenAI нужен секрет <code>OPENAI_API_KEY</code> в репозитории neuru-email. "
+          + "Размер 1536×1024 даёт горизонтальный кадр — он лучше подходит для обложек Дзена и ВК."
+        : "YandexART принимает произвольные размеры, но горизонтальный кадр у него получается "
+          + "хуже, чем у OpenAI. Если качество не устраивает, переключитесь на OpenAI GPT Image.";
+    }
+  };
+
+  window.admSaveImages=function(){
+    var mi=document.getElementById("adm-imgmodel");
+    if(mi && mi.value.trim()) imgCfg.model=mi.value.trim();
+    SS("neuru_imggen",imgCfg);
+    admToast("Генератор картинок сохранён: "+imgCfg.provider+" · "+imgCfg.model);
+  };
+
+  // Читает выбор для агента-иллюстратора
+  window.getImgCfg=function(){
+    try{ return JSON.parse(localStorage.getItem("neuru_imggen")||"{}"); }catch(e){ return {}; }
+  };
+
   var brand=S("neuru_brand",{name:"НЭЙРУ",logo:""});
   window.admApplyBrand=function(){
     var lp=document.getElementById("adm-logoprev"),c=document.getElementById("adm-company");
@@ -6502,7 +6671,7 @@ function renderAnMd(text){
     document.querySelectorAll("#sec-admin .adm-tab").forEach(function(b){b.onclick=function(){document.querySelectorAll("#sec-admin .adm-tab").forEach(function(x){x.classList.remove("on");});document.querySelectorAll("#sec-admin .adm-pane").forEach(function(x){x.classList.remove("on");});b.classList.add("on");document.getElementById("adm-"+b.dataset.t).classList.add("on");};});
     document.querySelectorAll("#sec-admin .adm-seg button").forEach(function(b){b.onclick=function(){document.querySelectorAll("#sec-admin .adm-seg button").forEach(function(x){x.classList.remove("on");});b.classList.add("on");period=b.dataset.r;admRenderTokens();};});
   }
-  function init(){if(!document.getElementById("adm-agents"))return;bind();admRenderAgents();admRenderProv();admApplyBrand();admRenderTokens();admLoadFromGit(false);}
+  function init(){if(!document.getElementById("adm-agents"))return;bind();admRenderAgents();admRenderProv();admRenderImages();admApplyBrand();admRenderTokens();admLoadFromGit(false);}
   if(document.readyState!=="loading")init();else document.addEventListener("DOMContentLoaded",init);
 })();
 </script></body>
