@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-11-fix43 -->
+<!DOCTYPE html><!-- v2026-09-11-fix44 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -446,7 +446,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 11.09 · fix43</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 11.09 · fix44</div>
   </div>
 </aside>
 
@@ -757,9 +757,15 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
   <!-- fix42: площадки запускаются по отдельности — параметр platforms уходит
        в workflow, движок читает его как PUB_PLATFORMS. -->
   <div style="display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin-bottom:16px">
-    <button class="run-btn" style="margin:0" onclick="runAgentPlatform('agents-pub-strateg.yml','dzen','Дзен',this)">▶ Запуск · Дзен</button>
+    <button class="run-btn" style="margin:0" onclick="runAgentPlatform('agents-pub-strateg.yml','all','Все площадки',this)">▶ Запуск · все площадки</button>
+    <button class="run-btn" style="margin:0;background:#EF5350" onclick="runAgentPlatform('agents-pub-strateg.yml','dzen','Дзен',this)">▶ Запуск · Дзен</button>
     <button class="run-btn" style="margin:0;background:#0077FF" onclick="runAgentPlatform('agents-pub-strateg.yml','vk','ВКонтакте',this)">▶ Запуск · ВКонтакте</button>
     <span id="run-st-strateg" style="font-size:12px;color:var(--muted)"></span>
+  </div>
+  <div style="font-size:11px;color:var(--muted);margin:-8px 0 16px;line-height:1.5">
+    Стратегия на дату — один файл с разделами по площадкам. Запуск одной площадки
+    перезаписывает только её раздел, если в промпт добавлено правило переноса чужих
+    разделов; без него файл переписывается целиком.
   </div>
 
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
