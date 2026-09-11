@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-10-fix42 -->
+<!DOCTYPE html><!-- v2026-09-11-fix43 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -446,7 +446,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 10.09 · fix42</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 11.09 · fix43</div>
   </div>
 </aside>
 
@@ -702,12 +702,18 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
 <section class="section" id="sec-pub-copy">
   <div class="sec-title">ИИ-<span>Копирайтер-Публицист</span></div>
   <div class="sec-desc">Публикации по площадкам на день. Запуск: ежедневно в 13:00.</div>
-  <!-- fix42: площадки запускаются по отдельности — параметр platforms уходит
-       в workflow, движок читает его как PUB_PLATFORMS. -->
+  <!-- fix43: три кнопки. Копирайтер пишет отдельный файл на площадку
+       (copy-<дата>-<площадка>.md), поэтому запуск одной площадки не задевает
+       файлы остальных. -->
   <div style="display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin-bottom:16px">
-    <button class="run-btn" style="margin:0" onclick="runAgentPlatform('agents-pub-copywriter.yml','dzen','Дзен',this)">▶ Запуск · Дзен</button>
+    <button class="run-btn" style="margin:0" onclick="runAgentPlatform('agents-pub-copywriter.yml','all','Все площадки',this)">▶ Запуск · все площадки</button>
+    <button class="run-btn" style="margin:0;background:#EF5350" onclick="runAgentPlatform('agents-pub-copywriter.yml','dzen','Дзен',this)">▶ Запуск · Дзен</button>
     <button class="run-btn" style="margin:0;background:#0077FF" onclick="runAgentPlatform('agents-pub-copywriter.yml','vk','ВКонтакте',this)">▶ Запуск · ВКонтакте</button>
     <span id="run-st-copywriter" style="font-size:12px;color:var(--muted)"></span>
+  </div>
+  <div style="font-size:11px;color:var(--muted);margin:-8px 0 16px;line-height:1.5">
+    Каждая площадка пишется в свой файл, запуск одной не перезаписывает остальные.
+    «Все площадки» — это семь каналов по десять публикаций, прогон идёт около часа.
   </div>
 
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
