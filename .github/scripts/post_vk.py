@@ -1,4 +1,4 @@
-import os, re, json, mimetypes, uuid, urllib.request, urllib.parse
+import os, re, json, time, mimetypes, uuid, urllib.request, urllib.parse
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 
@@ -15,6 +15,12 @@ state_file = folder / 'state-vk.json'
 API = 'https://api.vk.com/method/'
 API_VERSION = '5.199'
 TEXT_LIMIT = 15000   # технический лимит ВК заметно выше, но дальше падает вовлечение
+
+# Расписание: один пост в час начиная с FIRST_HOUR по Москве. GitHub запускает
+# cron когда придётся и часть окон пропускает, поэтому скрипт считает, сколько
+# постов должно было выйти к текущему часу, и догоняет отставание.
+FIRST_HOUR = int(os.environ.get('POST_FIRST_HOUR', '12'))
+GAP_SEC = int(os.environ.get('POST_GAP_SEC', '30'))
 
 if not folder.exists():
     print(f'No folder: {folder}')
@@ -35,56 +41,69 @@ if state_file.exists():
         published = json.load(f).get('published', [])
 print(f'Published: {published}')
 
-next_file = next_num = None
-for p in sorted(folder.glob('post-*.md'), key=lambda x: int(x.stem.split('-')[1])):
-    n = int(p.stem.split('-')[1])
-    if n not in published:
-        next_file, next_num = p, n
-        break
+all_posts = sorted(folder.glob('post-*.md'), key=lambda x: int(x.stem.split('-')[1]))
+pending = [(p, int(p.stem.split('-')[1])) for p in all_posts
+           if int(p.stem.split('-')[1]) not in published]
 
-if not next_file:
+if not pending:
     print('All posts published')
     exit(0)
 
-print(f'Publishing post #{next_num}')
-text = next_file.read_text(encoding='utf-8')
+hour = datetime.now(msk).hour
+due = 0 if hour < FIRST_HOUR else min(hour - FIRST_HOUR + 1, len(all_posts))
+behind = due - len(published)
 
-# ── Служебные поля копирайтера не публикуем ──
-text = re.sub(r'^[ \t]*(?:\*\*)?Промпт\s+для\s+картинки(?:\*\*)?\s*:[\s\S]*?(?=\n[ \t]*\n|\Z)',
-              '', text, flags=re.MULTILINE | re.IGNORECASE)
-text = re.sub(r'^[ \t]*(?:\*\*)?Знаков(?:\*\*)?\s*:[^\n]*$', '', text,
-              flags=re.MULTILINE | re.IGNORECASE)
-text = re.sub(r'\n*-{3,}\n*\s*Иллюстрация\s*:.*$', '', text, flags=re.IGNORECASE | re.DOTALL)
+print(f'Час {hour}:00 МСК · подготовлено {len(all_posts)}, опубликовано {len(published)}, '
+      f'должно быть {due}')
 
-# ── Ссылка в первый комментарий ──
-# Внешние ссылки в теле поста ВК пессимизирует. Копирайтер помечает такую
-# строку как [В КОММЕНТАРИЙ] — вырезаем её из текста и публикуем отдельно.
-comment_text = ''
-m = re.search(r'^[ \t]*\[В\s+КОММЕНТАРИЙ\]\s*(.*)$', text, flags=re.MULTILINE | re.IGNORECASE)
-if m:
-    comment_text = m.group(1).strip()
-    text = text[:m.start()] + text[m.end():]
-    print(f'Ссылка уйдёт комментарием: {comment_text[:80]}')
+if behind <= 0:
+    print(f'По расписанию публиковать пока нечего (первый пост в {FIRST_HOUR}:00)')
+    exit(0)
 
-# ВК не понимает markdown — снимаем разметку, заголовок оставляем строкой
-text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
-text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
-text = re.sub(r'\*([^*\n]+)\*', r'\1', text)
-text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'\1 \2', text)
-text = re.sub(r'^[ \t]*Хэштеги\s*:\s*', '', text, flags=re.MULTILINE | re.IGNORECASE)
-text = re.sub(r'^[-*]\s+', '• ', text, flags=re.MULTILINE)
-text = re.sub(r'\n{3,}', '\n\n', text).strip()
-if len(text) > TEXT_LIMIT:
-    text = text[:TEXT_LIMIT - 3] + '...'
+to_publish = pending[:behind]
+if len(to_publish) > 1:
+    print(f'Отставание {behind} постов — публикую их за этот прогон с паузой {GAP_SEC} с')
+print('К публикации: ' + ', '.join('#' + str(n) for _, n in to_publish))
+def prepare(md_path, num):
+    """Готовит текст, ссылку для комментария и картинку одного поста."""
+    text = md_path.read_text(encoding='utf-8')
 
-# ── Картинка ──
-image = None
-for ext in ('jpg', 'jpeg', 'png', 'webp'):
-    cand = folder / f'post-{next_num}.{ext}'
-    if cand.exists():
-        image = cand
-        break
-print(f'Image: {image if image else "нет — публикую только текст"}')
+    # ── Служебные поля копирайтера не публикуем ──
+    text = re.sub(r'^[ \t]*(?:\*\*)?Промпт\s+для\s+картинки(?:\*\*)?\s*:[\s\S]*?(?=\n[ \t]*\n|\Z)',
+                  '', text, flags=re.MULTILINE | re.IGNORECASE)
+    text = re.sub(r'^[ \t]*(?:\*\*)?Знаков(?:\*\*)?\s*:[^\n]*$', '', text,
+                  flags=re.MULTILINE | re.IGNORECASE)
+    text = re.sub(r'\n*-{3,}\n*\s*Иллюстрация\s*:.*$', '', text,
+                  flags=re.IGNORECASE | re.DOTALL)
+
+    # ── Ссылка в первый комментарий ──
+    # Внешние ссылки в теле поста ВК пессимизирует. Копирайтер помечает такую
+    # строку как [В КОММЕНТАРИЙ] — вырезаем её из текста и публикуем отдельно.
+    comment_text = ''
+    m = re.search(r'^[ \t]*\[В\s+КОММЕНТАРИЙ\]\s*(.*)$', text,
+                  flags=re.MULTILINE | re.IGNORECASE)
+    if m:
+        comment_text = m.group(1).strip()
+        text = text[:m.start()] + text[m.end():]
+
+    # ВК не понимает markdown — снимаем разметку, заголовок оставляем строкой
+    text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+    text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
+    text = re.sub(r'\*([^*\n]+)\*', r'\1', text)
+    text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'\1 \2', text)
+    text = re.sub(r'^[ \t]*Хэштеги\s*:\s*', '', text, flags=re.MULTILINE | re.IGNORECASE)
+    text = re.sub(r'^[-*]\s+', '• ', text, flags=re.MULTILINE)
+    text = re.sub(r'\n{3,}', '\n\n', text).strip()
+    if len(text) > TEXT_LIMIT:
+        text = text[:TEXT_LIMIT - 3] + '...'
+
+    image = None
+    for ext in ('jpg', 'jpeg', 'png', 'webp'):
+        cand = folder / f'post-{num}.{ext}'
+        if cand.exists():
+            image = cand
+            break
+    return text, comment_text, image
 
 
 def vk(method, params):
@@ -133,18 +152,22 @@ def upload_photo(path):
 
 
 def save_state():
-    published.append(next_num)
     state_file.parent.mkdir(parents=True, exist_ok=True)
     with open(state_file, 'w') as f:
         json.dump({'date': date_str, 'published': sorted(published)}, f,
                   ensure_ascii=False, indent=2)
 
 
-try:
+def publish(md_path, num):
+    """Публикует один пост в сообщество. Возвращает True при успехе."""
+    text, comment_text, image = prepare(md_path, num)
+    print(f'— пост #{num}: {"картинка " + image.name if image else "без картинки"}'
+          f'{", ссылка комментарием" if comment_text else ""}')
+
     attachment = None
     if image:
         attachment = upload_photo(image)
-        print(f'Картинка загружена: {attachment}')
+        print(f'   картинка загружена: {attachment}')
 
     params = {
         'owner_id': '-' + group_id,   # минус означает сообщество, а не человека
@@ -156,7 +179,7 @@ try:
 
     res = vk('wall.post', params)
     post_id = res.get('post_id')
-    print(f'Опубликовано: https://vk.com/wall-{group_id}_{post_id}')
+    print(f'   опубликовано: https://vk.com/wall-{group_id}_{post_id}')
 
     if comment_text:
         try:
@@ -166,14 +189,28 @@ try:
                 'from_group': group_id,
                 'message': comment_text,
             })
-            print('Ссылка добавлена комментарием')
+            print('   ссылка добавлена комментарием')
         except Exception as e:
             # Пост уже вышел — из-за комментария не откатываем
-            print(f'Комментарий не добавлен: {e}')
+            print(f'   комментарий не добавлен: {e}')
+    return True
 
-    save_state()
-    print('Success!')
+
+sent = 0
+try:
+    for i, (md_path, num) in enumerate(to_publish):
+        if i:
+            time.sleep(GAP_SEC)     # ВК ограничивает частоту записей на стену
+        publish(md_path, num)
+        published.append(num)
+        save_state()                # пишем после каждого — прогон может прерваться
+        sent += 1
+
+    print(f'Success! Опубликовано за прогон: {sent}. '
+          f'Всего за {date_str}: {len(published)} из {len(all_posts)}')
 
 except Exception as e:
     print(f'Error: {e}')
+    if sent:
+        print(f'Успело выйти постов: {sent}, состояние сохранено')
     exit(1)
