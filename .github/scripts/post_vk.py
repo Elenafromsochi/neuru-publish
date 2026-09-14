@@ -85,6 +85,26 @@ def prepare(md_path, num):
     if m:
         comment_text = m.group(1).strip()
         text = text[:m.start()] + text[m.end():]
+    else:
+        # Копирайтер иногда пишет «демонстрация в первом комментарии», а саму
+        # ссылку ставит в текст или не ставит вовсе. Если пометки нет, но
+        # в тексте есть ссылка — выносим её в комментарий сами: иначе внешняя
+        # ссылка останется в теле поста и срежет охват.
+        promises = re.search(r'в\s+(?:первом\s+)?комментари', text, flags=re.IGNORECASE)
+        link = re.search(r'(?:^|\s)((?:https?://|www\.)\S+)', text)
+        if link:
+            url = link.group(1).rstrip('.,);')
+            # Абзац, в котором лежит ссылка, целиком уходит в комментарий
+            para_start = text.rfind('\n\n', 0, link.start())
+            para_start = 0 if para_start < 0 else para_start + 2
+            para_end = text.find('\n\n', link.end())
+            para_end = len(text) if para_end < 0 else para_end
+            comment_text = text[para_start:para_end].strip()
+            text = (text[:para_start] + text[para_end:])
+            print(f'   пометки [В КОММЕНТАРИЙ] нет — вынес ссылку в комментарий сам: {url[:60]}')
+        elif promises:
+            print('   ⚠ в тексте обещан комментарий, но ссылки нет ни с пометкой, '
+                  'ни в тексте — комментария не будет. Проверьте промпт копирайтера.')
 
     # ВК не понимает markdown — снимаем разметку, заголовок оставляем строкой
     text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
