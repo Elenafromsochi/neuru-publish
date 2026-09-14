@@ -1,11 +1,20 @@
 name: VK Posting
 
 on:
-  # Расписание пока выключено: сначала проверяем публикацию кнопкой.
-  # Когда всё устроит — раскомментируйте строки ниже (9-19 UTC = 12:00-22:00 МСК).
-  # schedule:
-  #   - cron: '30 9-19 * * *'
+  # Скрипт сам считает, сколько постов должно было выйти к текущему часу,
+  # и догоняет отставание, поэтому расписание частое: GitHub запускает cron
+  # когда придётся и часть окон пропускает. Лишнего не опубликуется —
+  # скрипт ориентируется на час, а не на факт запуска.
+  # 8-20 UTC = 11:00-23:00 МСК. Минуты смещены от телеграмного постинга,
+  # чтобы два прогона не спорили за один коммит состояния.
+  schedule:
+    - cron: '10,30,50 8-20 * * *'
   workflow_dispatch:
+
+# Два прогона одновременно могли бы опубликовать один пост дважды
+concurrency:
+  group: vk-posting
+  cancel-in-progress: false
 
 jobs:
   post:
@@ -19,6 +28,10 @@ jobs:
         env:
           VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}
           VK_GROUP_ID: ${{ secrets.VK_GROUP_ID }}
+          # Первый пост дня и пауза между догоняющими — меняются здесь,
+          # скрипт править не нужно.
+          POST_FIRST_HOUR: '12'
+          POST_GAP_SEC: '30'
         run: python3 .github/scripts/post_vk.py
 
       - name: Save state
@@ -26,6 +39,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase --autostash || true
           git add -A
           git diff --staged --quiet || git commit -m "posted: vk"
           git push
