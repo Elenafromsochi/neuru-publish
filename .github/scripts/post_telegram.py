@@ -11,11 +11,6 @@ CHAT_ID = '@HotelAI_ru'
 CAPTION_LIMIT = 1024   # лимит подписи к фото в Telegram
 TEXT_LIMIT = 4096      # лимит обычного сообщения
 
-# Репозиторий Actions подставляет сам — из него собираем прямую ссылку
-# на картинку для превью.
-GH_REPO = os.environ.get('GITHUB_REPOSITORY', 'Elenafromsochi/neuru-publish')
-GH_BRANCH = os.environ.get('GITHUB_REF_NAME', 'main')
-
 if not folder.exists():
     print(f'No folder: {folder}')
     exit(0)
@@ -119,13 +114,6 @@ def save_state():
                   ensure_ascii=False, indent=2)
 
 
-def raw_url(path):
-    """Прямая ссылка на файл в репозитории — по ней Telegram скачает картинку."""
-    from urllib.parse import quote
-    return (f'https://raw.githubusercontent.com/{GH_REPO}/{GH_BRANCH}/'
-            + quote(str(path).replace(os.sep, '/')))
-
-
 try:
     if image and len(text) <= CAPTION_LIMIT:
         # Короткий пост — картинка и подпись одним сообщением
@@ -136,43 +124,34 @@ try:
             exit(1)
 
     elif image:
-        # Текст длиннее подписи. Чтобы остался ОДИН пост, отправляем текст
-        # сообщением, а картинку — крупным превью над ним. Так обходится
-        # лимит подписи 1024: у сообщения лимит 4096.
-        url = raw_url(image)
-        print(f'Текст {len(text)} симв. — один пост с картинкой в превью')
-        print(f'  ссылка на картинку: {url}')
-        payload = {
-            'chat_id': CHAT_ID,
-            'text': text[:TEXT_LIMIT - 6] + '...' if len(text) > TEXT_LIMIT else text,
-            'parse_mode': 'HTML',
-            'link_preview_options': {
-                'url': url,
-                'prefer_large_media': True,
-                'show_above_text': True,
-            },
-        }
-        result = api('sendMessage', payload)
+        # Текст длиннее подписи к фото (лимит 1024). Превью ссылки Telegram
+        # рисует картинку в блоке с полосой слева — выглядит как ссылка,
+        # а не как изображение. Поэтому отправляем настоящую картинку
+        # и следом текст: два сообщения, но картинка обычная.
+        print(f'Текст {len(text)} симв. — длиннее подписи, отправляю фото и текст')
+        result = api_photo(image)
         if not result.get('ok'):
-            print(f'Превью не прошло: {result}')
-            # Запасной путь: фото отдельным сообщением, затем текст.
-            # Так бывает, если репозиторий приватный и Telegram не смог
-            # скачать картинку по ссылке.
-            print('Отправляю фото и текст двумя сообщениями')
-            r1 = api_photo(image)
-            if not r1.get('ok'):
-                print(f'Telegram error (photo): {r1}')
-                exit(1)
-            payload.pop('link_preview_options')
-            result = api('sendMessage', payload)
-            if not result.get('ok'):
-                print(f'Telegram error (text): {result}')
-                exit(1)
+            print(f'Telegram error (photo): {result}')
+            exit(1)
+        body = text[:TEXT_LIMIT - 6] + '...' if len(text) > TEXT_LIMIT else text
+        result = api('sendMessage', {
+            'chat_id': CHAT_ID,
+            'text': body,
+            'parse_mode': 'HTML',
+            # Гасим превью ссылки на neuru.ru: иначе под текстом появится
+            # ещё один блок со ссылкой, и в посте окажутся две картинки.
+            'link_preview_options': {'is_disabled': True},
+        })
+        if not result.get('ok'):
+            # Фото уже ушло — в состояние пост не пишем, иначе текст потеряется
+            print(f'Telegram error (text): {result}')
+            exit(1)
 
     else:
         body = text[:TEXT_LIMIT - 6] + '...' if len(text) > TEXT_LIMIT else text
         result = api('sendMessage', {'chat_id': CHAT_ID, 'text': body,
-                                     'parse_mode': 'HTML'})
+                                     'parse_mode': 'HTML',
+                                     'link_preview_options': {'is_disabled': True}})
         if not result.get('ok'):
             print(f'Telegram error: {result}')
             exit(1)
