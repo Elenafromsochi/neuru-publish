@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-11-fix48 -->
+<!DOCTYPE html><!-- v2026-09-15-fix49 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -446,7 +446,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 11.09 · fix48</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 15.09 · fix49</div>
   </div>
 </aside>
 
@@ -4151,6 +4151,57 @@ window.closeImageStep = function(){
   document.removeEventListener('paste', imgOnPaste);
 };
 
+/* fix49: три типа кадра. Выбор живёт в модалке и уходит агенту параметром,
+   потому что для одной публикации может понадобиться и фотосцена, и обложка. */
+var IMG_STYLES = [
+  ['photo',  '📷 Фотосцена',   'Реалистичный кадр без текста и роботов. Для Дзена и VC.'],
+  ['scheme', '📊 Схема',        'Инфографика: шаги процесса, иконки, подписи, светлый фон, фирменная палитра.'],
+  ['cover',  '🏷 Обложка',      'Сцена плюс крупный заголовок публикации поверх кадра.']
+];
+
+function imgCurStyle(){
+  var st = (window._imgStep && _imgStep.style) || 'photo';
+  return st;
+}
+
+function imgStyleBtns(){
+  var cur = imgCurStyle();
+  return IMG_STYLES.map(function(s){
+    var sel = s[0] === cur;
+    return '<button onclick="imgSetStyle(\''+s[0]+'\')" style="'
+      + 'background:' + (sel ? 'var(--grad)' : 'none') + ';'
+      + 'color:' + (sel ? '#fff' : 'var(--text)') + ';'
+      + 'border:1px solid ' + (sel ? 'transparent' : 'var(--border)') + ';'
+      + 'border-radius:8px;padding:8px 14px;font-size:12px;font-weight:' + (sel ? '700' : '500') + ';'
+      + 'cursor:pointer;font-family:inherit">' + s[1] + '</button>';
+  }).join('');
+}
+
+function imgStyleHint(){
+  var cur = imgCurStyle();
+  var s = IMG_STYLES.filter(function(x){ return x[0] === cur; })[0] || IMG_STYLES[0];
+  var hint = s[2];
+  // Текст на картинке надёжно рисует только OpenAI
+  if(cur !== 'photo'){
+    var c = {};
+    try { c = JSON.parse(localStorage.getItem('neuru_imggen') || '{}'); } catch(e){}
+    if(c.provider !== 'openai'){
+      hint += ' Внимание: текст на кадре надёжно рисует только OpenAI — '
+            + 'переключите генератор в Админ-панели → Картинки.';
+    }
+  }
+  return imgEsc(hint);
+}
+
+window.imgSetStyle = function(v){
+  if(!window._imgStep) return;
+  _imgStep.style = v;
+  var box = document.getElementById('img-styles');
+  if(box) box.innerHTML = imgStyleBtns();
+  var h = document.getElementById('img-style-hint');
+  if(h) h.innerHTML = imgStyleHint();
+};
+
 // Подпись в модалке: чем будет нарисована картинка
 function imgGenLabel(){
   var c = {};
@@ -4175,12 +4226,14 @@ function imgStepHtml(){
     +'<input type="file" accept="image/*" onchange="imgPickFile(this)" style="font-size:12px;font-family:inherit">'
     +'</div>'
 
-    // 2. Скриншот
+    /* fix49: вместо блока со скриншотом — выбор типа кадра.
+       Для каждого типа движок подставляет свой набор требований к подаче:
+       фотосцена без текста, инфографика со шагами или обложка с заголовком. */
     +'<div style="'+card+'">'
-    +'<div style="font-size:13px;font-weight:700;margin-bottom:8px;color:var(--text)">2. Добавить скриншот</div>'
-    +'<div id="img-paste-zone" style="border:2px dashed var(--border);border-radius:12px;padding:18px;'
-    +'text-align:center;font-size:12px;color:var(--muted)">Сделайте снимок экрана и нажмите Cmd+V прямо здесь.<br>'
-    +'Файл можно и перетащить в это поле.</div>'
+    +'<div style="font-size:13px;font-weight:700;margin-bottom:8px;color:var(--text)">2. Тип кадра</div>'
+    +'<div id="img-styles" style="display:flex;gap:8px;flex-wrap:wrap">'+imgStyleBtns()+'</div>'
+    +'<div id="img-style-hint" style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5">'
+    +imgStyleHint()+'</div>'
     +'</div>'
 
     // 3. Промпт
@@ -4283,6 +4336,7 @@ function illImgInputs(mode){
   if(c.model)   out.img_model   = String(c.model);
   if(c.size)    out.img_size    = String(c.size);
   if(c.quality) out.img_quality = String(c.quality);
+  out.img_style = (window._imgStep && _imgStep.style) || 'photo';
   return out;
 }
 
