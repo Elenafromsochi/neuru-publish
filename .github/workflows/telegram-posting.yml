@@ -1,9 +1,20 @@
 name: Telegram Posting
 
 on:
+  # Скрипт сам считает, сколько постов должно было выйти к текущему часу,
+  # и догоняет отставание. Поэтому расписание стоит частым: GitHub запускает
+  # cron когда придётся и часть окон пропускает — 13.09 из одиннадцати
+  # запланированных прогонов случилось четыре. Лишнего не опубликуется:
+  # скрипт ориентируется на час, а не на факт запуска.
+  # 8-20 UTC = 11:00-23:00 МСК, каждые 20 минут.
   schedule:
-    - cron: '0 9-19 * * *'
+    - cron: '*/20 8-20 * * *'
   workflow_dispatch:
+
+# Два прогона одновременно могли бы опубликовать один пост дважды
+concurrency:
+  group: telegram-posting
+  cancel-in-progress: false
 
 jobs:
   post:
@@ -16,6 +27,10 @@ jobs:
       - name: Post to Telegram
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          # Первый пост дня и пауза между догоняющими — можно менять здесь,
+          # скрипт править не нужно.
+          POST_FIRST_HOUR: '12'
+          POST_GAP_SEC: '20'
         run: python3 .github/scripts/post_telegram.py
 
       - name: Save state
@@ -23,6 +38,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase --autostash || true
           git add -A
-          git diff --staged --quiet || git commit -m "posted: dzen"
+          git diff --staged --quiet || git commit -m "posted: telegram"
           git push
