@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-15-fix49 -->
+<!DOCTYPE html><!-- v2026-09-15-fix51 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -446,7 +446,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 15.09 · fix49</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 15.09 · fix51</div>
   </div>
 </aside>
 
@@ -736,10 +736,11 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
   <!-- Табы площадок копирайтера -->
   <div id="copy-tabs" style="display:none;flex-wrap:wrap;gap:6px;margin-bottom:16px">
     
-    <button class="pcpy-tab" onclick="copySelectCopyTab(this,'dzen')" class="pcpy-tab active">📰 Дзен</button>
+    <button class="pcpy-tab active" onclick="copySelectCopyTab(this,'tg')">✈️ Telegram</button>
+    <button class="pcpy-tab" onclick="copySelectCopyTab(this,'dzen')">📰 Дзен</button>
     <button class="pcpy-tab" onclick="copySelectCopyTab(this,'vk')">💙 ВКонтакте</button>
     <button class="pcpy-tab" onclick="copySelectCopyTab(this,'tenchat')">🤝 ТенЧат</button>
-    <button class="pcpy-tab" onclick="copySelectCopyTab(this,'welcome')">🌟 Welcome Times</button>
+    <button class="pcpy-tab" onclick="copySelectCopyTab(this,'tj')">🍋 Т—Ж</button>
     <button class="pcpy-tab" onclick="copySelectCopyTab(this,'vc')">🔷 VC.ru</button>
     <button class="pcpy-tab" onclick="copySelectCopyTab(this,'mitt')">🏨 MITT Connect</button>
     <button class="pcpy-tab" onclick="copySelectCopyTab(this,'tilda')">🌐 Сайт Тильда</button>
@@ -788,10 +789,11 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
   <!-- Табы площадок -->
   <div id="pcpy-tabs" style="display:none;flex-wrap:wrap;gap:6px;margin-bottom:16px">
     <button class="pcpy-tab active" onclick="pcpySelectTab(this,'all')">📋 Стратегия</button>
+    <button class="pcpy-tab" onclick="pcpySelectTab(this,'tg')">✈️ Telegram</button>
     <button class="pcpy-tab" onclick="pcpySelectTab(this,'dzen')">📰 Дзен</button>
     <button class="pcpy-tab" onclick="pcpySelectTab(this,'vk')">💙 ВКонтакте</button>
     <button class="pcpy-tab" onclick="pcpySelectTab(this,'tenchat')">🤝 ТенЧат</button>
-    <button class="pcpy-tab" onclick="pcpySelectTab(this,'welcome')">🌟 Welcome Times</button>
+    <button class="pcpy-tab" onclick="pcpySelectTab(this,'tj')">🍋 Т—Ж</button>
     <button class="pcpy-tab" onclick="pcpySelectTab(this,'vc')">🔷 VC.ru</button>
     <button class="pcpy-tab" onclick="pcpySelectTab(this,'mitt')">🏨 MITT Connect</button>
     <button class="pcpy-tab" onclick="pcpySelectTab(this,'tilda')">🌐 Сайт Тильда</button>
@@ -803,12 +805,12 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
 <!-- ══ ПУБЛИКАЦИИ: ПОСТИНГ ══ -->
 <section class="section" id="sec-pub-post">
   <div class="sec-title">ИИ-<span>Постинг</span></div>
-  <div class="sec-desc">Публикация одобренных материалов. ТГ / Дзен выходит автоматически каждый час с 12:00 до 22:00 по Москве; кнопка ниже публикует следующий одобренный пост, не дожидаясь расписания. Остальные площадки пока публикуются вручную.</div>
+  <div class="sec-desc">Публикация одобренных материалов. Telegram и ВКонтакте выходят автоматически каждый час с 12:00 до 22:00 по Москве; кнопки ниже публикуют следующий одобренный пост, не дожидаясь расписания. Остальные площадки пока публикуются вручную — текст берите кнопкой «Скопировать» в ИИ-Копирайтере-Публицисте.</div>
 
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px">
     <div class="card" style="text-align:center;padding:20px">
       <div style="font-size:28px;margin-bottom:8px">✈️</div>
-      <div style="font-weight:700;margin-bottom:4px">ТГ / Дзен</div>
+      <div style="font-weight:700;margin-bottom:4px">Telegram</div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Автопостинг через Telegram Bot API</div>
       <div style="font-size:11px;color:#10B981;font-weight:600;margin-bottom:12px">● Подключено</div>
       <button id="post-btn-tgdzen" onclick="runPosting(this)" style="background:var(--grad);color:#fff;border:none;border-radius:9px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">▶ Постинг</button>
@@ -829,8 +831,14 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
       <div style="font-size:11px;color:var(--light);font-weight:600">Публикация вручную</div>
     </div>
     <div class="card" style="text-align:center;padding:20px;opacity:.55">
-      <div style="font-size:28px;margin-bottom:8px">🌟</div>
-      <div style="font-weight:700;margin-bottom:4px">Welcome Times</div>
+      <div style="font-size:28px;margin-bottom:8px">📰</div>
+      <div style="font-weight:700;margin-bottom:4px">Дзен</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">У Дзена нет API для публикации</div>
+      <div style="font-size:11px;color:var(--light);font-weight:600">Публикация вручную</div>
+    </div>
+    <div class="card" style="text-align:center;padding:20px;opacity:.55">
+      <div style="font-size:28px;margin-bottom:8px">🍋</div>
+      <div style="font-weight:700;margin-bottom:4px">Т—Ж</div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Автопостинг пока не подключён</div>
       <div style="font-size:11px;color:var(--light);font-weight:600">Публикация вручную</div>
     </div>
@@ -3381,15 +3389,19 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
 
 // ══ ОБЩИЕ УТИЛИТЫ КАЛЕНДАРЯ ПУБЛИКАЦИЙ ══
 var PUB_REPO = 'Elenafromsochi/neuru-publish';
+/* fix51: Telegram и Дзен — отдельные площадки. У них разные лимиты:
+   в Telegram пост уходит картинкой с подписью (предел 1024 знака),
+   для Дзена пишется статья на 3000. Welcome Times заменён на Т—Ж. */
 var PCPY_PLATFORM_LABELS = {
-  dzen:'📰 Дзен', vk:'💙 ВКонтакте', tenchat:'🤝 ТенЧат',
-  welcome:'🌟 Welcome Times', vc:'🔷 VC.ru', mitt:'🏨 MITT Connect',
+  tg:'✈️ Telegram', dzen:'📰 Дзен', vk:'💙 ВКонтакте', tenchat:'🤝 ТенЧат',
+  tj:'🍋 Т—Ж', vc:'🔷 VC.ru', mitt:'🏨 MITT Connect',
   tilda:'🌐 Сайт Тильда'
 };
 var PCPY_PLATFORM_MAP = {
+  'telegram':'tg','телеграм':'tg','тг':'tg','tg':'tg',
   'дзен':'dzen','dzen':'dzen','вконтакте':'vk','вк':'vk','vk':'vk',
   'тенчат':'tenchat','tenchat':'tenchat','ten chat':'tenchat',
-  'welcome times':'welcome','welcome':'welcome',
+  'т—ж':'tj','т-ж':'tj','тж':'tj','tj':'tj','тинькофф журнал':'tj',
   'vc.ru':'vc','vc':'vc','mitt connect':'mitt','mitt':'mitt',
   'сайт тильда':'tilda','тильда':'tilda','tilda':'tilda'
 };
@@ -3633,15 +3645,16 @@ function stratRenderContent(md){
 
   // ── Панели площадок — ищем карточки публикаций по площадкам во всём файле ──
   var platKeys = {
+    tg:['telegram','телеграм','тг'],
     dzen:['дзен','dzen'],
     vk:['вконтакте','вк','vk'],
     tenchat:['тенчат','tenchat','тен чат'],
-    welcome:['welcome times','welcome'],
+    tj:['т—ж','т-ж','тж','тинькофф журнал'],
     vc:['vc.ru','vc.ru','вс.ру'],
     mitt:['mitt connect','mitt'],
     tilda:['сайт тильда','тильда','tilda']
   };
-  var platBlocks = {dzen:[],vk:[],tenchat:[],welcome:[],vc:[],mitt:[],tilda:[]};
+  var platBlocks = {tg:[],dzen:[],vk:[],tenchat:[],tj:[],vc:[],mitt:[],tilda:[]};
 
   // Ищем блоки публикаций — разбиваем по разделителям или по "Публикация №N"
   var pubBlocks = md.split(/\n---\n/).filter(function(b){ return b.trim().length > 20; });
@@ -3663,7 +3676,7 @@ function stratRenderContent(md){
     }
   });
 
-  ['dzen','vk','tenchat','welcome','vc','mitt','tilda'].forEach(function(pl){
+  ['tg','dzen','vk','tenchat','tj','vc','mitt','tilda'].forEach(function(pl){
     // 1) Дневной формат — главный путь: раздел «## <Площадка>», порезанный
     //    на «### Публикация №N». Проверяем его ПЕРВЫМ, иначе старый разбор
     //    по разделителям затягивал в панель ещё и шапку дня.
@@ -3737,10 +3750,10 @@ var copyCalMonth = mskParts().m-1;
 var copyCalDates = [];
 var copyCalSelected = null;
 var _copyBusy = false;
-var copyCurrentTab = 'dzen';
+var copyCurrentTab = 'tg';
 var _copyPlatformCache = {}; // dateStr → { dzen: md, vk: md, ... }
 
-var COPY_PLATFORMS = ['dzen','vk','tenchat','welcome','vc','mitt'];
+var COPY_PLATFORMS = ['tg','dzen','vk','tenchat','tj','vc','mitt','tilda'];
 
 function copyInitCal(){
   copyCalYear = mskParts().y;
@@ -4151,6 +4164,60 @@ window.closeImageStep = function(){
   document.removeEventListener('paste', imgOnPaste);
 };
 
+/* fix50: промпт собирается здесь, а не в движке — чтобы при переключении
+   типа кадра было видно, что именно уйдёт генератору, и можно было поправить
+   перед отправкой. Палитра НЭЙРУ и требования к тексту на кадре те же. */
+var IMG_BRAND = 'белый или очень светло-серый фон, графитовый тёмно-серый текст, '
+  + 'акценты электрический синий и синефиолетовый градиент, мягкое неоновое свечение '
+  + 'только вокруг ключевых элементов, лёгкие цифровые текстуры на фоне, карточки '
+  + 'со скруглёнными углами и мягкими тенями, плоские линейные иконки, много '
+  + 'свободного пространства, ощущение интерфейса SaaS-платформы';
+
+// Заголовок публикации — для обложки он должен попасть на кадр дословно
+function imgPubTitle(){
+  var t = (window._imgStep && _imgStep.text) || '';
+  var m = t.match(/^Публикация\s*[№#]?\s*\d+\s*[—–-]\s*([^\n]+)/im);
+  if(!m){
+    // в карточке заголовок может идти первой строкой как «# …»
+    m = t.match(/^#\s+([^\n]+)/m);
+  }
+  return m ? m[1].replace(/\*\*/g,'').replace(/^[«"']|[»"']$/g,'').trim() : '';
+}
+
+function imgBuildPrompt(style, base){
+  var body = String(base || '').trim();
+  if(style === 'scheme'){
+    return 'Горизонтальная инфографика 16:9 в стиле современной презентации. '
+      + 'Сюжет: ' + body + '. '
+      + 'Оформление: ' + IMG_BRAND + '. '
+      + 'Слева дружелюбный белый робот-ассистент с синим свечением на лице '
+      + 'и наушниками, вполоборота; справа от него ряд карточек-шагов процесса, '
+      + 'в каждой плоская иконка и короткая подпись на РУССКОМ языке, шаги '
+      + 'соединены тонкими стрелками и пронумерованы кружками. Подписи короткие, '
+      + 'два-три слова, крупный читаемый шрифт без засечек. Фон — светлое '
+      + 'размытое лобби отеля. Текст только на русском языке, без латиницы '
+      + 'и без искажённых букв.';
+  }
+  if(style === 'cover'){
+    var title = imgPubTitle();
+    return 'Горизонтальная обложка 16:9 для статьи. '
+      + 'Сцена: ' + body + '. '
+      + 'Слева в кадре дружелюбный белый робот-ассистент с синим свечением '
+      + 'на лице и наушниками, в форме сотрудника отеля; справа сцена '
+      + 'гостиничного ресепшена. '
+      + (title
+          ? 'В правой части кадра КРУПНЫЙ ЗАГОЛОВОК, текст ровно такой и без '
+            + 'изменений: «' + title + '». '
+          : 'В правой части кадра КРУПНЫЙ ЗАГОЛОВОК НА РУССКОМ ЯЗЫКЕ в две-три строки. ')
+      + 'Белый жирный шрифт без засечек, ключевая фраза выделена на '
+      + 'синефиолетовой плашке со скруглёнными углами, заголовок занимает '
+      + 'не меньше трети кадра. '
+      + 'Оформление: ' + IMG_BRAND + '. '
+      + 'Текст только на русском языке, без латиницы и без искажённых букв.';
+  }
+  return body;   // фотосцена — промпт копирайтера как есть
+}
+
 /* fix49: три типа кадра. Выбор живёт в модалке и уходит агенту параметром,
    потому что для одной публикации может понадобиться и фотосцена, и обложка. */
 var IMG_STYLES = [
@@ -4195,7 +4262,20 @@ function imgStyleHint(){
 
 window.imgSetStyle = function(v){
   if(!window._imgStep) return;
+  var ta = document.getElementById('img-prompt');
+
+  /* Базовый сюжет — то, что написал копирайтер. Запоминаем его один раз,
+     иначе при втором переключении обёртка налезет на обёртку. Если промпт
+     правили руками в режиме фотосцены, правка становится новой основой. */
+  if(_imgStep.promptBase === undefined) _imgStep.promptBase = _imgStep.prompt || '';
+  if(ta && _imgStep.style === 'photo') _imgStep.promptBase = ta.value.trim();
+
   _imgStep.style = v;
+  if(ta){
+    ta.value = imgBuildPrompt(v, _imgStep.promptBase);
+    if(window.imgUpdateReady) imgUpdateReady();
+  }
+
   var box = document.getElementById('img-styles');
   if(box) box.innerHTML = imgStyleBtns();
   var h = document.getElementById('img-style-hint');
