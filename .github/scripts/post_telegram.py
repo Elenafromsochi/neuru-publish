@@ -4,8 +4,19 @@ from datetime import datetime, timezone, timedelta
 
 msk = timezone(timedelta(hours=3))
 date_str = datetime.now(msk).strftime('%d.%m.%Y')
-folder = Path(f'social/posting/{date_str}/dzen')
-state_file = folder / 'state-dzen.json'
+# Telegram и Дзен разведены на отдельные площадки: в канал уходит короткий
+# пост картинкой с подписью, а для Дзена пишется длинная статья и публикуется
+# вручную. Поэтому читаем папку tg. Папка dzen поддерживается как запасной
+# вариант: пока в ней ещё лежат публикации, сделанные до разделения.
+PLATFORM = os.environ.get('POST_PLATFORM', 'tg').strip() or 'tg'
+folder = Path(f'social/posting/{date_str}/{PLATFORM}')
+if not folder.exists() and PLATFORM == 'tg':
+    legacy = Path(f'social/posting/{date_str}/dzen')
+    if legacy.exists():
+        print(f'Папки {folder} нет, беру прежнюю {legacy}')
+        folder = legacy
+        PLATFORM = 'dzen'
+state_file = folder / f'state-{PLATFORM}.json'
 
 CHAT_ID = '@HotelAI_ru'
 CAPTION_LIMIT = 1024   # лимит подписи к фото в Telegram
