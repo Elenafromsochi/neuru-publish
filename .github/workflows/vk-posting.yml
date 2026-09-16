@@ -2,11 +2,12 @@ name: VK Posting
 
 on:
   # Скрипт сам считает, сколько постов должно было выйти к текущему часу,
-  # и догоняет отставание, поэтому расписание частое: GitHub запускает cron
-  # когда придётся и часть окон пропускает. Лишнего не опубликуется —
-  # скрипт ориентируется на час, а не на факт запуска.
-  # 8-20 UTC = 11:00-23:00 МСК. Минуты смещены от телеграмного постинга,
-  # чтобы два прогона не спорили за один коммит состояния.
+  # и публикует не больше одного за прогон и не чаще раза в 45 минут.
+  # Расписание частое, потому что GitHub запускает cron с задержкой
+  # и часть окон пропускает.
+  # 8-20 UTC = 11:00-23:59 МСК: первый пост в 12:00, запас до полуночи —
+  # на случай задержек, чтобы последние посты дня всё равно вышли.
+  # Минуты смещены от телеграмного постинга, чтобы прогоны не спорили за коммит.
   schedule:
     - cron: '10,30,50 8-20 * * *'
   workflow_dispatch:
@@ -19,6 +20,7 @@ concurrency:
 jobs:
   post:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,19 +29,35 @@ jobs:
       - name: Post to VK
         env:
           VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}
+          # Необязательный: ключ пользователя-администратора для загрузки картинок.
+          # Если не задан, картинки грузятся ключом VK_ACCESS_TOKEN.
+          VK_USER_TOKEN: ${{ secrets.VK_USER_TOKEN }}
           VK_GROUP_ID: ${{ secrets.VK_GROUP_ID }}
-          # Первый пост дня и пауза между догоняющими — меняются здесь,
-          # скрипт править не нужно.
-          POST_FIRST_HOUR: '12'
-          POST_GAP_SEC: '30'
+          # Настройки расписания — меняются здесь, скрипт править не нужно
+          POST_FIRST_HOUR: '12'     # первый пост дня, час по Москве
+          POST_MAX_PER_RUN: '1'     # сколько постов максимум за один прогон
+          POST_MIN_GAP_MIN: '45'    # минимум минут между постами
+          POST_GAP_SEC: '30'        # пауза, если за прогон выходит больше одного
         run: python3 .github/scripts/post_vk.py
 
+      # Состояние сохраняется при любом исходе: если пост вышел, а следующий
+      # шаг упал, отметка о вышедшем посте всё равно попадёт в репозиторий,
+      # и он не опубликуется повторно.
       - name: Save state
-        if: success()
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git pull --rebase --autostash || true
-          git add -A
-          git diff --staged --quiet || git commit -m "posted: vk"
-          git push
+          git add -A social/posting
+          if git diff --staged --quiet; then
+            echo "Состояние не изменилось"
+            exit 0
+          fi
+          git commit -m "posted: vk"
+          for i in 1 2 3; do
+            git pull --rebase --autostash && git push && exit 0
+            echo "push не прошёл, попытка $i — повторяю через 10 с"
+            sleep 10
+          done
+          echo "::error::Состояние не сохранено — возможна повторная публикация"
+          exit 1
