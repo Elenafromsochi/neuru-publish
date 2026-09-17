@@ -3,30 +3,26 @@ from pathlib import Path
 from datetime import datetime, timezone, timedelta
 
 # Автопостинг в сообщество ВКонтакте.
-# Берём первый неопубликованный пост за сегодня из social/posting/<дата>/vk
-# и публикуем. Отметки — в state-vk.json, отдельно от телеграмных.
 #
-# fix54:
-# — не больше POST_MAX_PER_RUN постов за прогон (по умолчанию 1) и не чаще,
-#   чем раз в POST_MIN_GAP_MIN минут (по умолчанию 45). Раньше отставание
-#   догонялось пачкой с паузой 30 с, а ВК режет охват за серии постов;
-# — время последней публикации хранится в state-vk.json;
-# — картинка грузится ключом VK_USER_TOKEN, если он задан: метод
-#   photos.getWallUploadServer не работает с ключом сообщества (ошибка 27);
-# — если картинку загрузить не удалось, пост выходит без неё.
-#
-# fix55: окно публикаций 10:00–21:00 МСК, по одному посту в час с 10:00;
-#   если постов больше 12, они равномерно сгущаются внутри окна.
+# fix56: общая очередь за несколько дней.
+# — В очередь попадают неопубликованные посты из social/posting/<дата>/vk
+#   за сегодня и за прошлые дни (POST_BACKLOG_DAYS, по умолчанию 14).
+#   Порядок: от старой даты к новой, внутри дня — по номеру поста.
+# — Посты выходят по одному в час с POST_FIRST_HOUR до POST_LAST_HOUR
+#   по Москве (10:00–21:00), не больше одного за прогон и не чаще раза
+#   в POST_MIN_GAP_MIN минут. Что не поместилось, переходит на завтра.
+# — Отметки о выходе хранятся в state-vk.json каждой папки дня,
+#   а журнал публикаций по дням — в social/posting/vk-log.json.
 #
 # fix54b: фото пробуется загрузить всеми заданными ключами по очереди,
-#   в журнал пишется вид каждого ключа (пользователя или сообщества),
-#   сами ключи не выводятся.
+#   в журнал пишется вид каждого ключа, сами ключи не выводятся.
+# fix54: если картинку загрузить не удалось, пост выходит без неё.
 
 msk = timezone(timedelta(hours=3))
 now = datetime.now(msk)
-date_str = now.strftime('%d.%m.%Y')
-folder = Path(f'social/posting/{date_str}/vk')
-state_file = folder / 'state-vk.json'
+today = now.date()
+ROOT = Path('social/posting')
+LOG_FILE = ROOT / 'vk-log.json'
 
 API = 'https://api.vk.com/method/'
 API_VERSION = '5.199'
@@ -37,11 +33,7 @@ LAST_HOUR = int(os.environ.get('POST_LAST_HOUR', '21'))
 MAX_PER_RUN = max(1, int(os.environ.get('POST_MAX_PER_RUN', '1')))
 MIN_GAP_MIN = max(0, int(os.environ.get('POST_MIN_GAP_MIN', '45')))
 GAP_SEC = int(os.environ.get('POST_GAP_SEC', '30'))
-
-if not folder.exists():
-    print(f'Папки {folder} нет — на сегодня посты ВК не одобрены. '
-          f'Одобрите их в ИИ-Копирайтере-Публицисте на вкладке ВКонтакте.')
-    exit(0)
+BACKLOG_DAYS = max(0, int(os.environ.get('POST_BACKLOG_DAYS', '14')))
 
 token = os.environ.get('VK_ACCESS_TOKEN', '').strip()
 user_token = os.environ.get('VK_USER_TOKEN', '').strip()
@@ -53,68 +45,117 @@ if not group_id.isdigit():
     print(f'VK_GROUP_ID должен быть числом без минуса, получено: "{group_id}"')
     exit(1)
 
-published, last_at = [], None
-if state_file.exists():
-    with open(state_file) as f:
-        st = json.load(f)
-    published = st.get('published', [])
-    if st.get('last_at'):
+
+# ── Чтение очереди ──
+
+def read_state(folder):
+    f = folder / 'state-vk.json'
+    if not f.exists():
+        return {'published': [], 'last_at': None}
+    try:
+        with open(f) as fh:
+            st = json.load(fh)
+        return {'published': st.get('published', []), 'last_at': st.get('last_at'),
+                'date': st.get('date')}
+    except Exception:
+        return {'published': [], 'last_at': None}
+
+
+def write_state(folder, st):
+    folder.mkdir(parents=True, exist_ok=True)
+    with open(folder / 'state-vk.json', 'w') as fh:
+        json.dump({'date': folder.parent.name,
+                   'published': sorted(st['published']),
+                   'last_at': st.get('last_at')}, fh, ensure_ascii=False, indent=2)
+
+
+def parse_iso(v):
+    try:
+        return datetime.fromisoformat(v) if v else None
+    except ValueError:
+        return None
+
+
+folders = []
+if ROOT.exists():
+    for d in ROOT.iterdir():
         try:
-            last_at = datetime.fromisoformat(st['last_at'])
+            day = datetime.strptime(d.name, '%d.%m.%Y').date()
         except ValueError:
-            last_at = None
-print(f'Опубликовано ранее: {published}'
-      + (f', последний пост в {last_at.astimezone(msk):%H:%M} МСК' if last_at else ''))
+            continue
+        if (d / 'vk').is_dir() and 0 <= (today - day).days <= BACKLOG_DAYS:
+            folders.append((day, d / 'vk'))
+folders.sort()
 
-all_posts = sorted(folder.glob('post-*.md'), key=lambda x: int(x.stem.split('-')[1]))
-pending = [(p, int(p.stem.split('-')[1])) for p in all_posts
-           if int(p.stem.split('-')[1]) not in published]
+queue, states = [], {}
+last_at = None
+for day, folder in folders:
+    st = read_state(folder)
+    states[folder] = st
+    t = parse_iso(st.get('last_at'))
+    if t and (last_at is None or t > last_at):
+        last_at = t
+    for p in sorted(folder.glob('post-*.md'), key=lambda x: int(x.stem.split('-')[1])):
+        n = int(p.stem.split('-')[1])
+        if n not in st['published']:
+            queue.append((day, folder, p, n))
 
-if not pending:
-    print(f'Все одобренные посты за {date_str} уже вышли: {len(published)} из {len(all_posts)}. '
-          f'Чтобы публикации продолжились, одобрите следующие в ИИ-Копирайтере-Публицисте.')
+# Журнал: сколько постов уже вышло сегодня
+log = {}
+if LOG_FILE.exists():
+    try:
+        with open(LOG_FILE) as fh:
+            log = json.load(fh) or {}
+    except Exception:
+        log = {}
+today_key = today.isoformat()
+if today_key in log:
+    published_today = len(log[today_key])
+else:
+    # Первый запуск с журналом: до этого публиковалась только папка сегодняшнего дня
+    tf = ROOT / today.strftime('%d.%m.%Y') / 'vk'
+    t = parse_iso(states.get(tf, {}).get('last_at')) if tf in states else None
+    published_today = len(states[tf]['published']) if tf in states and t and t.date() == today else 0
+
+old = [q for q in queue if q[0] < today]
+print(f'Очередь ВК: {len(queue)} постов'
+      + (f', из них за прошлые дни {len(old)} ('
+         + ', '.join(sorted({q[0].strftime("%d.%m") for q in old})) + ')' if old else '')
+      + f'. Сегодня уже вышло: {published_today}'
+      + (f', последний пост в {last_at.astimezone(msk):%d.%m %H:%M} МСК' if last_at else ''))
+
+if not queue:
+    print('Неопубликованных постов нет. Одобрите следующие в ИИ-Копирайтере-Публицисте.')
     exit(0)
 
 hour = now.hour
+if hour < FIRST_HOUR:
+    print(f'Рано: публикации идут с {FIRST_HOUR}:00 до {LAST_HOUR}:00 по Москве')
+    exit(0)
+if hour > LAST_HOUR + 1:
+    print(f'Поздно: окно публикаций закрылось в {LAST_HOUR}:00, очередь продолжится завтра с {FIRST_HOUR}:00')
+    exit(0)
 
-
-def slot_hour(k, total):
-    """Час выхода k-го поста дня (k с 1): по одному в час с FIRST_HOUR.
-    Если постов больше, чем часов в окне, они равномерно сгущаются,
-    и последний всё равно выходит не позже LAST_HOUR."""
-    span = max(1, LAST_HOUR - FIRST_HOUR + 1)
-    return FIRST_HOUR + ((k - 1) * span) // max(total, span)
-
-
-total = len(all_posts)
-slots = [slot_hour(k, total) for k in range(1, total + 1)]
-due = sum(1 for h in slots if h <= hour)
-behind = due - len(published)
-
-print(f'Час {hour}:00 МСК · одобрено {len(all_posts)}, опубликовано {len(published)}, '
-      f'по расписанию должно быть {due}')
-
+span = LAST_HOUR - FIRST_HOUR + 1
+due = min(hour - FIRST_HOUR + 1, span)
+behind = due - published_today
+print(f'Час {hour}:00 МСК · к этому часу должно выйти {due}, вышло {published_today}')
 if behind <= 0:
-    nxt = next((h for h in slots if h > hour), None)
-    print(f'По расписанию публиковать пока нечего. Окно {FIRST_HOUR}:00–{LAST_HOUR}:00, '
-          f'часы выхода: {", ".join(str(h) for h in slots)}'
-          + (f'; следующий пост в {nxt}:00' if nxt is not None else ''))
+    print(f'По расписанию пока рано: следующий пост в {min(FIRST_HOUR + published_today, LAST_HOUR)}:00'
+          if published_today < span else f'Дневной лимит {span} постов выбран — остальное завтра')
     exit(0)
 
 if last_at and MIN_GAP_MIN:
     passed = (now - last_at).total_seconds() / 60
     if passed < MIN_GAP_MIN:
-        print(f'Прошлый пост вышел {int(passed)} мин назад — жду {MIN_GAP_MIN} мин между постами. '
-              f'Отставание {behind}, догоню в следующих прогонах.')
+        print(f'Прошлый пост вышел {int(passed)} мин назад — жду {MIN_GAP_MIN} мин между постами.')
         exit(0)
 
-to_publish = pending[:min(behind, MAX_PER_RUN)]
-if behind > len(to_publish):
-    print(f'Отставание {behind}: публикую {len(to_publish)} сейчас, остальные — в следующих прогонах')
-print('К публикации: ' + ', '.join('#' + str(n) for _, n in to_publish))
+to_publish = queue[:min(behind, MAX_PER_RUN)]
+print('К публикации: ' + ', '.join(f'{q[0]:%d.%m} №{q[3]}' for q in to_publish))
 
 
-def prepare(md_path, num):
+def prepare(md_path, num, folder):
     """Готовит текст, ссылку для комментария и картинку одного поста."""
     text = md_path.read_text(encoding='utf-8')
 
@@ -265,20 +306,27 @@ def upload_photo(path):
                        + 'в секрете VK_USER_TOKEN')
 
 
-def save_state():
-    state_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(state_file, 'w') as f:
-        json.dump({
-            'date': date_str,
-            'published': sorted(published),
-            'last_at': last_at.isoformat() if last_at else None,
-        }, f, ensure_ascii=False, indent=2)
 
 
-def publish(md_path, num):
+def remember(day, folder, num):
+    global last_at
+    st = states.setdefault(folder, {'published': [], 'last_at': None})
+    st['published'].append(num)
+    last_at = datetime.now(msk)
+    st['last_at'] = last_at.isoformat()
+    write_state(folder, st)
+    log.setdefault(today_key, []).append(
+        {'date': day.strftime('%d.%m.%Y'), 'num': num, 'at': last_at.isoformat()})
+    keep = sorted(log)[-30:]
+    with open(LOG_FILE, 'w') as fh:
+        json.dump({k: log[k] for k in keep}, fh, ensure_ascii=False, indent=2)
+
+
+def publish(md_path, num, folder, day):
     """Публикует один пост в сообщество."""
-    text, comment_text, image = prepare(md_path, num)
-    print(f'— пост #{num}: {"картинка " + image.name if image else "без картинки"}'
+    text, comment_text, image = prepare(md_path, num, folder)
+    label = f'{day:%d.%m} №{num}'
+    print(f'— пост {label}: {"картинка " + image.name if image else "без картинки"}'
           f'{", ссылка комментарием" if comment_text else ""}')
 
     attachment = None
@@ -287,13 +335,12 @@ def publish(md_path, num):
             attachment = upload_photo(image)
             print(f'   картинка загружена: {attachment}')
         except Exception as e:
-            # Пост важнее картинки: выходит без неё, а в журнале видна причина
-            print(f'::warning title=VK Posting::пост #{num} выходит без картинки — {e}')
+            print(f'::warning title=VK Posting::пост {label} выходит без картинки — {e}')
             print(f'   ⚠ картинку загрузить не удалось, публикую без неё: {e}')
 
     params = {
-        'owner_id': '-' + group_id,   # минус означает сообщество, а не человека
-        'from_group': 1,              # публикуем от имени сообщества
+        'owner_id': '-' + group_id,
+        'from_group': 1,
         'message': text,
     }
     if attachment:
@@ -318,20 +365,14 @@ def publish(md_path, num):
 
 sent = 0
 try:
-    for i, (md_path, num) in enumerate(to_publish):
+    for i, (day, folder, md_path, num) in enumerate(to_publish):
         if i:
             time.sleep(GAP_SEC)
-        publish(md_path, num)
-        published.append(num)
-        last_at = datetime.now(msk)
-        save_state()                # пишем после каждого — прогон может прерваться
+        publish(md_path, num, folder, day)
+        remember(day, folder, num)      # пишем после каждого — прогон может прерваться
         sent += 1
-
-    left = len(all_posts) - len(published)
-    print(f'Success! Опубликовано за прогон: {sent}. '
-          f'Всего за {date_str}: {len(published)} из {len(all_posts)}'
-          + (f', в очереди ещё {left}' if left else ''))
-
+    print(f'Success! Опубликовано за прогон: {sent}. Сегодня всего: {published_today + sent}. '
+          f'В очереди осталось: {len(queue) - sent}')
 except Exception as e:
     print(f'::error title=VK Posting::{e}')
     print(f'Error: {e}')
