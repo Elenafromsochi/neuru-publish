@@ -4,6 +4,8 @@ from datetime import datetime, timezone, timedelta
 
 # Автопостинг в сообщество ВКонтакте.
 #
+# fix60: если пост в прогоне не публикуется, причина выводится в Annotations.
+#
 # fix59: картинка перед загрузкой перекодируется в JPEG до 2048 px (Pillow),
 #   в журнал пишется её реальный формат и размер.
 #
@@ -55,6 +57,13 @@ if not token:
 if not group_id.isdigit():
     print(f'VK_GROUP_ID должен быть числом без минуса, получено: "{group_id}"')
     exit(1)
+
+
+def skip(msg):
+    """Пост в этом прогоне не публикуется: причина видна в Annotations."""
+    print(msg)
+    print('::notice title=VK Posting — пост не опубликован::' + msg.replace('\n', ' '))
+    exit(0)
 
 
 # ── Чтение очереди ──
@@ -136,31 +145,27 @@ print(f'Очередь ВК: {len(queue)} постов'
       + (f', последний пост в {last_at.astimezone(msk):%d.%m %H:%M} МСК' if last_at else ''))
 
 if not queue:
-    print('Неопубликованных постов нет. Одобрите следующие в ИИ-Копирайтере-Публицисте.')
-    exit(0)
+    skip('Неопубликованных постов нет. Одобрите следующие в ИИ-Копирайтере-Публицисте.')
 
 hour = now.hour
 if hour < FIRST_HOUR:
-    print(f'Рано: публикации идут с {FIRST_HOUR}:00 до {LAST_HOUR}:00 по Москве')
-    exit(0)
+    skip(f'Рано: публикации идут с {FIRST_HOUR}:00 до {LAST_HOUR}:00 по Москве')
 if hour > LAST_HOUR + 1:
-    print(f'Поздно: окно публикаций закрылось в {LAST_HOUR}:00, очередь продолжится завтра с {FIRST_HOUR}:00')
-    exit(0)
+    skip(f'Поздно: окно публикаций закрылось в {LAST_HOUR}:00, очередь продолжится завтра с {FIRST_HOUR}:00')
 
 span = LAST_HOUR - FIRST_HOUR + 1
 due = min(hour - FIRST_HOUR + 1, span)
 behind = due - published_today
 print(f'Час {hour}:00 МСК · к этому часу должно выйти {due}, вышло {published_today}')
 if behind <= 0:
-    print(f'По расписанию пока рано: следующий пост в {min(FIRST_HOUR + published_today, LAST_HOUR)}:00'
-          if published_today < span else f'Дневной лимит {span} постов выбран — остальное завтра')
-    exit(0)
+    skip(f'По расписанию пока рано: следующий пост в {min(FIRST_HOUR + published_today, LAST_HOUR)}:00'
+         if published_today < span else f'Дневной лимит {span} постов выбран — остальное завтра')
 
 if last_at and MIN_GAP_MIN:
     passed = (now - last_at).total_seconds() / 60
     if passed < MIN_GAP_MIN:
-        print(f'Прошлый пост вышел {int(passed)} мин назад — жду {MIN_GAP_MIN} мин между постами.')
-        exit(0)
+        skip(f'Прошлый пост вышел {int(passed)} мин назад — между постами пауза {MIN_GAP_MIN} мин. '
+             f'Следующий пост выйдет при запуске после {(last_at + timedelta(minutes=MIN_GAP_MIN)).astimezone(msk):%H:%M}.')
 
 to_publish = queue[:min(behind, MAX_PER_RUN)]
 print('К публикации: ' + ', '.join(f'{q[0]:%d.%m} №{q[3]}' for q in to_publish))
@@ -201,7 +206,9 @@ def prepare(md_path, num, folder):
             text = text[:para_start] + text[para_end:]
             print(f'   пометки [В КОММЕНТАРИЙ] нет — вынес ссылку в комментарий сам: {url[:60]}')
         else:
-            # fix59: картинка перед загрузкой перекодируется в JPEG до 2048 px (Pillow),
+            # fix60: если пост в прогоне не публикуется, причина выводится в Annotations.
+#
+# fix59: картинка перед загрузкой перекодируется в JPEG до 2048 px (Pillow),
 #   в журнал пишется её реальный формат и размер.
 #
 # fix58: если загрузка на стену недоступна (ключ сообщества, ошибка 27),
