@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-17-fix57 -->
+<!DOCTYPE html><!-- v2026-09-17-fix59 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -446,7 +446,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 17.09 · fix57</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 17.09 · fix59</div>
   </div>
 </aside>
 
@@ -710,11 +710,16 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     <button class="run-btn" style="margin:0;background:#2AABEE" onclick="runAgentPlatform('agents-pub-copywriter.yml','tg','Telegram',this)">▶ Запуск · Telegram</button>
     <button class="run-btn" style="margin:0;background:#111111" onclick="runAgentPlatform('agents-pub-copywriter.yml','dzen','Дзен',this)">▶ Запуск · Дзен</button>
     <button class="run-btn" style="margin:0;background:#0077FF" onclick="runAgentPlatform('agents-pub-copywriter.yml','vk','ВКонтакте',this)">▶ Запуск · ВКонтакте</button>
+    <button class="run-btn" style="margin:0;background:#F59E0B" onclick="runAgentPlatform('agents-pub-copywriter.yml','tenchat','ТенЧат',this)">▶ Запуск · ТенЧат</button>
+    <button class="run-btn" style="margin:0;background:#FFDD2D;color:#111" onclick="runAgentPlatform('agents-pub-copywriter.yml','tj','Т—Ж',this)">▶ Запуск · Т—Ж</button>
+    <button class="run-btn" style="margin:0;background:#E5484D" onclick="runAgentPlatform('agents-pub-copywriter.yml','vc','VC.ru',this)">▶ Запуск · VC.ru</button>
+    <button class="run-btn" style="margin:0;background:#0F766E" onclick="runAgentPlatform('agents-pub-copywriter.yml','mitt','MITT Connect',this)">▶ Запуск · MITT Connect</button>
+    <button class="run-btn" style="margin:0;background:#FF855F" onclick="runAgentPlatform('agents-pub-copywriter.yml','tilda','Сайт Тильда',this)">▶ Запуск · Сайт Тильда</button>
     <span id="run-st-copywriter" style="font-size:12px;color:var(--muted)"></span>
   </div>
   <div style="font-size:11px;color:var(--muted);margin:-8px 0 16px;line-height:1.5">
     Каждая площадка пишется в свой файл, запуск одной не перезаписывает остальные.
-    «Все площадки» — это семь каналов по десять публикаций, прогон идёт около часа.
+    «Все площадки» — это восемь каналов по десять публикаций, прогон идёт больше часа.
   </div>
 
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
@@ -763,12 +768,17 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     <button class="run-btn" style="margin:0;background:#2AABEE" onclick="runAgentPlatform('agents-pub-strateg.yml','tg','Telegram',this)">▶ Запуск · Telegram</button>
     <button class="run-btn" style="margin:0;background:#111111" onclick="runAgentPlatform('agents-pub-strateg.yml','dzen','Дзен',this)">▶ Запуск · Дзен</button>
     <button class="run-btn" style="margin:0;background:#0077FF" onclick="runAgentPlatform('agents-pub-strateg.yml','vk','ВКонтакте',this)">▶ Запуск · ВКонтакте</button>
+    <button class="run-btn" style="margin:0;background:#F59E0B" onclick="runAgentPlatform('agents-pub-strateg.yml','tenchat','ТенЧат',this)">▶ Запуск · ТенЧат</button>
+    <button class="run-btn" style="margin:0;background:#FFDD2D;color:#111" onclick="runAgentPlatform('agents-pub-strateg.yml','tj','Т—Ж',this)">▶ Запуск · Т—Ж</button>
+    <button class="run-btn" style="margin:0;background:#E5484D" onclick="runAgentPlatform('agents-pub-strateg.yml','vc','VC.ru',this)">▶ Запуск · VC.ru</button>
+    <button class="run-btn" style="margin:0;background:#0F766E" onclick="runAgentPlatform('agents-pub-strateg.yml','mitt','MITT Connect',this)">▶ Запуск · MITT Connect</button>
+    <button class="run-btn" style="margin:0;background:#FF855F" onclick="runAgentPlatform('agents-pub-strateg.yml','tilda','Сайт Тильда',this)">▶ Запуск · Сайт Тильда</button>
     <span id="run-st-strateg" style="font-size:12px;color:var(--muted)"></span>
   </div>
   <div style="font-size:11px;color:var(--muted);margin:-8px 0 16px;line-height:1.5">
     Стратегия на дату — один файл с разделами по площадкам. Запуск одной площадки
-    перезаписывает только её раздел, если в промпт добавлено правило переноса чужих
-    разделов; без него файл переписывается целиком.
+    обновляет только её раздел, разделы других площадок сохраняются.
+    Для площадки сначала запускайте Стратега-Публициста, потом Копирайтера-Публициста.
   </div>
 
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
@@ -807,7 +817,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
 <!-- ══ ПУБЛИКАЦИИ: ПОСТИНГ ══ -->
 <section class="section" id="sec-pub-post">
   <div class="sec-title">ИИ-<span>Постинг</span></div>
-  <div class="sec-desc">Публикация одобренных материалов. Telegram и ВКонтакте выходят автоматически по расписанию, ВКонтакте — по одному посту в час с 10:00 до 21:00 по Москве, начиная с неопубликованных за прошлые дни; кнопки ниже публикуют следующий одобренный пост, не дожидаясь расписания. Остальные площадки пока публикуются вручную — текст берите кнопкой «Скопировать» в ИИ-Копирайтере-Публицисте.</div>
+  <div class="sec-desc">Публикация одобренных материалов. Telegram и ВКонтакте выходят автоматически, начиная с неопубликованных за прошлые дни: Telegram — один пост в день в 12:00, ВКонтакте — по одному посту в час с 10:00 до 21:00 по Москве; кнопки ниже публикуют следующий одобренный пост, не дожидаясь расписания. Остальные площадки пока публикуются вручную — текст берите кнопкой «Скопировать» в ИИ-Копирайтере-Публицисте.</div>
 
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px">
     <div class="card" style="text-align:center;padding:20px">
@@ -4875,7 +4885,7 @@ var PQ_PLATFORMS = [
   ['tenchat','🤝','ТенЧат'], ['tj','🍋','Т—Ж'], ['vc','🔷','VC.ru'],
   ['mitt','🏨','MITT Connect'], ['tilda','🌐','Сайт Тильда']
 ];
-var PQ_BACKLOG = { vk: 14 };   // площадки, у которых очередь переходит на следующие дни
+var PQ_BACKLOG = { tg: 14, vk: 14 };   // площадки, у которых очередь переходит на следующие дни
 
 window.pqImgFallback = function(img){
   if(img.getAttribute('data-tried')) { img.style.display = 'none'; return; }
@@ -4897,11 +4907,16 @@ window.pqToggle = function(id){
 function pqReadState(dir, key, cb){
   var names = ['state-' + key + '.json', 'state.json'];
   if(key === 'tg') names.push('state-dzen.json');
+  var all = [];
   (function next(i){
-    if(i >= names.length){ cb([]); return; }
+    if(i >= names.length){ cb(all); return; }
     pubFetchRaw(dir + '/' + names[i], function(st, raw){
       if(st === 200){
-        try { cb((JSON.parse(raw) || {}).published || []); return; } catch(e){}
+        try {
+          ((JSON.parse(raw) || {}).published || []).forEach(function(n){
+            n = +n; if(all.indexOf(n) < 0) all.push(n);
+          });
+        } catch(e){}
       }
       next(i + 1);
     });
@@ -4964,7 +4979,7 @@ window.loadPostQueue = function(){
   box.style.textAlign = 'left';
   box.style.padding = '4px 0 0';
   box.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-bottom:12px">Одобренные публикации, '
-    + 'которые ещё не вышли. У ВКонтакте — вместе с хвостами прошлых дней.</div>'
+    + 'которые ещё не вышли. У Telegram и ВКонтакте — вместе с хвостами прошлых дней.</div>'
     + PQ_PLATFORMS.map(function(p){
         return '<div style="margin-bottom:18px">'
           + '<div style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--text);'
@@ -5040,7 +5055,7 @@ window.loadPostQueue = function(){
             + it.num + '…</div>'
             + '<div style="font-size:11px;margin-top:3px;color:' + (past ? '#D97706' : 'var(--muted)') + '">'
             + (past ? 'за ' + it.date.slice(0,5) + ' · ' : '') + '№' + it.num + ' · '
-            + (k === 0 && PQ_BACKLOG[key] ? 'выйдет следующим' : 'в очереди') + '</div>'
+            + (k === 0 && PQ_BACKLOG[key] ? (key === 'tg' ? 'выйдет следующим, в 12:00' : 'выйдет следующим') : 'в очереди') + '</div>'
             + '</div></div>'
             + '<div id="pq-txt-' + id + '" style="display:none;margin:8px 0 4px 78px;font-size:13px;'
             + 'line-height:1.7;color:var(--text);white-space:pre-line"></div>'
