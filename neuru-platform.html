@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-16-fix53 -->
+<!DOCTYPE html><!-- v2026-09-17-fix55 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -446,7 +446,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 16.09 · fix53</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 17.09 · fix55</div>
   </div>
 </aside>
 
@@ -707,7 +707,8 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
        файлы остальных. -->
   <div style="display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin-bottom:16px">
     <button class="run-btn" style="margin:0" onclick="runAgentPlatform('agents-pub-copywriter.yml','all','Все площадки',this)">▶ Запуск · все площадки</button>
-    <button class="run-btn" style="margin:0;background:#EF5350" onclick="runAgentPlatform('agents-pub-copywriter.yml','dzen','Дзен',this)">▶ Запуск · Дзен</button>
+    <button class="run-btn" style="margin:0;background:#2AABEE" onclick="runAgentPlatform('agents-pub-copywriter.yml','tg','Telegram',this)">▶ Запуск · Telegram</button>
+    <button class="run-btn" style="margin:0;background:#111111" onclick="runAgentPlatform('agents-pub-copywriter.yml','dzen','Дзен',this)">▶ Запуск · Дзен</button>
     <button class="run-btn" style="margin:0;background:#0077FF" onclick="runAgentPlatform('agents-pub-copywriter.yml','vk','ВКонтакте',this)">▶ Запуск · ВКонтакте</button>
     <span id="run-st-copywriter" style="font-size:12px;color:var(--muted)"></span>
   </div>
@@ -759,7 +760,8 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
        в workflow, движок читает его как PUB_PLATFORMS. -->
   <div style="display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin-bottom:16px">
     <button class="run-btn" style="margin:0" onclick="runAgentPlatform('agents-pub-strateg.yml','all','Все площадки',this)">▶ Запуск · все площадки</button>
-    <button class="run-btn" style="margin:0;background:#EF5350" onclick="runAgentPlatform('agents-pub-strateg.yml','dzen','Дзен',this)">▶ Запуск · Дзен</button>
+    <button class="run-btn" style="margin:0;background:#2AABEE" onclick="runAgentPlatform('agents-pub-strateg.yml','tg','Telegram',this)">▶ Запуск · Telegram</button>
+    <button class="run-btn" style="margin:0;background:#111111" onclick="runAgentPlatform('agents-pub-strateg.yml','dzen','Дзен',this)">▶ Запуск · Дзен</button>
     <button class="run-btn" style="margin:0;background:#0077FF" onclick="runAgentPlatform('agents-pub-strateg.yml','vk','ВКонтакте',this)">▶ Запуск · ВКонтакте</button>
     <span id="run-st-strateg" style="font-size:12px;color:var(--muted)"></span>
   </div>
@@ -805,7 +807,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
 <!-- ══ ПУБЛИКАЦИИ: ПОСТИНГ ══ -->
 <section class="section" id="sec-pub-post">
   <div class="sec-title">ИИ-<span>Постинг</span></div>
-  <div class="sec-desc">Публикация одобренных материалов. Telegram и ВКонтакте выходят автоматически каждый час с 12:00 до 22:00 по Москве; кнопки ниже публикуют следующий одобренный пост, не дожидаясь расписания. Остальные площадки пока публикуются вручную — текст берите кнопкой «Скопировать» в ИИ-Копирайтере-Публицисте.</div>
+  <div class="sec-desc">Публикация одобренных материалов. Telegram и ВКонтакте выходят автоматически по расписанию, ВКонтакте — по одному посту в час с 10:00 до 21:00 по Москве; кнопки ниже публикуют следующий одобренный пост, не дожидаясь расписания. Остальные площадки пока публикуются вручную — текст берите кнопкой «Скопировать» в ИИ-Копирайтере-Публицисте.</div>
 
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px">
     <div class="card" style="text-align:center;padding:20px">
@@ -816,6 +818,12 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
       <button id="post-btn-tgdzen" onclick="runPosting(this)" style="background:var(--grad);color:#fff;border:none;border-radius:9px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">▶ Постинг</button>
       <div id="post-status-tgdzen" style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5"></div>
     </div>
+    <div class="card" style="text-align:center;padding:20px;opacity:.55">
+      <div style="font-size:28px;margin-bottom:8px">📰</div>
+      <div style="font-weight:700;margin-bottom:4px">Дзен</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">У Дзена нет API для публикации</div>
+      <div style="font-size:11px;color:var(--light);font-weight:600">Публикация вручную</div>
+    </div>
     <div class="card" style="text-align:center;padding:20px">
       <div style="font-size:28px;margin-bottom:8px">💙</div>
       <div style="font-weight:700;margin-bottom:4px">ВКонтакте</div>
@@ -825,15 +833,9 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
       <div id="post-status-vk" style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5"></div>
     </div>
     <div class="card" style="text-align:center;padding:20px;opacity:.55">
-      <div style="font-size:28px;margin-bottom:8px">🏨</div>
-      <div style="font-weight:700;margin-bottom:4px">MITT Connect</div>
+      <div style="font-size:28px;margin-bottom:8px">🤝</div>
+      <div style="font-weight:700;margin-bottom:4px">ТенЧат</div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Автопостинг пока не подключён</div>
-      <div style="font-size:11px;color:var(--light);font-weight:600">Публикация вручную</div>
-    </div>
-    <div class="card" style="text-align:center;padding:20px;opacity:.55">
-      <div style="font-size:28px;margin-bottom:8px">📰</div>
-      <div style="font-weight:700;margin-bottom:4px">Дзен</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">У Дзена нет API для публикации</div>
       <div style="font-size:11px;color:var(--light);font-weight:600">Публикация вручную</div>
     </div>
     <div class="card" style="text-align:center;padding:20px;opacity:.55">
@@ -849,8 +851,8 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
       <div style="font-size:11px;color:var(--light);font-weight:600">Публикация вручную</div>
     </div>
     <div class="card" style="text-align:center;padding:20px;opacity:.55">
-      <div style="font-size:28px;margin-bottom:8px">🤝</div>
-      <div style="font-weight:700;margin-bottom:4px">ТенЧат</div>
+      <div style="font-size:28px;margin-bottom:8px">🏨</div>
+      <div style="font-weight:700;margin-bottom:4px">MITT Connect</div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Автопостинг пока не подключён</div>
       <div style="font-size:11px;color:var(--light);font-weight:600">Публикация вручную</div>
     </div>
@@ -863,7 +865,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
   </div>
 
   <div class="card">
-    <div class="card-hdr"><div class="card-title">📋 Одобренные публикации — ТГ / Дзен</div><button onclick="loadPostQueue()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:5px 12px;font-size:11px;cursor:pointer;font-family:inherit;color:var(--muted)">↻ Обновить</button></div>
+    <div class="card-hdr"><div class="card-title">📋 Очередь публикаций</div><button onclick="loadPostQueue()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:5px 12px;font-size:11px;cursor:pointer;font-family:inherit;color:var(--muted)">↻ Обновить</button></div>
     <div id="pub-queue" style="font-size:13px;color:var(--muted);padding:20px;text-align:center"><div class="loading" style="justify-content:center"><div class="spinner"></div>Загрузка…</div></div>
   </div>
 </section>
@@ -4828,7 +4830,7 @@ function postingRun(btn, wf, statusId){
             stop();
             if(run.conclusion === 'success'){
               say('Опубликовано ✓ Проверьте канал.', '#10B981');
-              if(wf === POST_WF) loadPostQueue();
+              loadPostQueue();
             } else {
               say('Прогон завершился со статусом «'+run.conclusion+'». Журнал: '+run.html_url, '#DC2626');
             }
@@ -4862,88 +4864,145 @@ function postSplitMd(md){
   return { title: title, body: body };
 }
 
+/* fix55: очередь постинга по всем площадкам.
+   Порядок площадок — как в Стратеге- и Копирайтере-Публицисте.
+   Показываются одобренные публикации за сегодня, которые ещё не вышли:
+   слева миниатюра, справа заголовок. По клику раскрывается текст. */
+var PQ_PLATFORMS = [
+  ['tg','✈️','Telegram'], ['dzen','📰','Дзен'], ['vk','💙','ВКонтакте'],
+  ['tenchat','🤝','ТенЧат'], ['tj','🍋','Т—Ж'], ['vc','🔷','VC.ru'],
+  ['mitt','🏨','MITT Connect'], ['tilda','🌐','Сайт Тильда']
+];
+
+// Картинка: сначала прямой ссылкой, если не открылась — через API с токеном
+window.pqImgFallback = function(img){
+  if(img.getAttribute('data-tried')) { img.style.display = 'none'; return; }
+  img.setAttribute('data-tried', '1');
+  var path = img.getAttribute('data-path');
+  var tok = getToken();
+  fetch('https://api.github.com/repos/' + PUB_REPO + '/contents/'
+        + path.split('/').map(encodeURIComponent).join('/') + '?ref=main',
+        { headers: { 'Authorization': 'token ' + tok, 'Accept': 'application/vnd.github.raw' } })
+    .then(function(r){ if(!r.ok) throw new Error(r.status); return r.blob(); })
+    .then(function(b){ img.src = URL.createObjectURL(b); })
+    .catch(function(){ img.style.display = 'none'; });
+};
+
+window.pqToggle = function(id){
+  var e = document.getElementById(id);
+  if(e) e.style.display = e.style.display === 'none' ? 'block' : 'none';
+};
+
+function pqReadState(dir, key, cb){
+  var names = ['state-' + key + '.json', 'state.json'];
+  if(key === 'tg') names.push('state-dzen.json', 'state-tg.json');
+  (function next(i){
+    if(i >= names.length){ cb([]); return; }
+    pubFetchRaw(dir + '/' + names[i], function(st, raw){
+      if(st === 200){
+        try { cb((JSON.parse(raw) || {}).published || []); return; } catch(e){}
+      }
+      next(i + 1);
+    });
+  })(0);
+}
+
 window.loadPostQueue = function(){
   var box = document.getElementById('pub-queue');
   if(!box) return;
   if(!getToken()){
-    box.innerHTML = 'Добавьте GitHub-токен в Админ-панели, чтобы увидеть публикации';
+    box.innerHTML = 'Добавьте GitHub-токен в Админ-панели, чтобы увидеть очередь';
     return;
   }
   var d = mskDMY();
-  var dir = 'social/posting/' + d + '/dzen';
   box.style.textAlign = 'left';
-  box.innerHTML = '<div class="loading" style="justify-content:center"><div class="spinner"></div>Читаю '
-    + imgEsc(dir) + '…</div>';
+  box.style.padding = '4px 0 0';
+  box.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-bottom:12px">Очередь на ' + d
+    + ' — одобренные публикации, которые ещё не вышли</div>'
+    + PQ_PLATFORMS.map(function(p){
+        return '<div id="pq-grp-' + p[0] + '" style="margin-bottom:18px">'
+          + '<div style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--text);'
+          + 'padding-bottom:8px;border-bottom:1px solid var(--border);margin-bottom:10px">'
+          + '<span>' + p[1] + '</span><span>' + p[2] + '</span>'
+          + '<span id="pq-cnt-' + p[0] + '" style="margin-left:auto;font-size:11px;font-weight:500;color:var(--muted)">читаю…</span>'
+          + '</div><div id="pq-list-' + p[0] + '"></div></div>';
+      }).join('');
 
-  pubFetchAPI(dir, function(status, text){
-    if(status !== 200){
-      box.style.textAlign = 'center';
-      box.innerHTML = 'За ' + d + ' одобренных публикаций нет. '
-        + 'Одобрите их в ИИ-Копирайтере-Публицисте — они появятся здесь.';
-      return;
-    }
-    var files = [];
-    try { files = JSON.parse(text) || []; } catch(e){}
-    var nums = files.filter(function(f){ return /^post-\d+\.md$/.test(f.name); })
-                    .map(function(f){ return parseInt(f.name.match(/\d+/)[0], 10); })
-                    .sort(function(a,b){ return a-b; });
-    var imgByNum = {};
-    files.forEach(function(f){
-      var m = f.name.match(/^post-(\d+)\.(jpe?g|png|webp)$/i);
-      if(m) imgByNum[+m[1]] = dir + '/' + f.name;
-    });
-    if(!nums.length){
-      box.style.textAlign = 'center';
-      box.innerHTML = 'За ' + d + ' одобренных публикаций нет.';
-      return;
-    }
+  (function nextPlatform(pi){
+    if(pi >= PQ_PLATFORMS.length) return;
+    var key = PQ_PLATFORMS[pi][0];
+    var dir = 'social/posting/' + d + '/' + key;
+    var cnt = document.getElementById('pq-cnt-' + key);
+    var list = document.getElementById('pq-list-' + key);
 
-    pubFetchRaw(dir + '/state-dzen.json', function(st2, raw){
-      var done = [];
-      if(st2 === 200){ try { done = (JSON.parse(raw)||{}).published || []; } catch(e){} }
+    pubFetchAPI(dir, function(status, text){
+      var files = [];
+      if(status === 200){ try { files = JSON.parse(text) || []; } catch(e){} }
+      var nums = files.filter(function(f){ return /^post-\d+\.md$/.test(f.name); })
+                      .map(function(f){ return parseInt(f.name.match(/\d+/)[0], 10); })
+                      .sort(function(a,b){ return a - b; });
+      if(!nums.length){
+        if(cnt) cnt.textContent = 'нет одобренных';
+        if(list) list.innerHTML = '<div style="font-size:12px;color:var(--light);padding:2px 0 4px">'
+          + 'Одобрите публикации в ИИ-Копирайтере-Публицисте — они появятся здесь.</div>';
+        nextPlatform(pi + 1);
+        return;
+      }
+      var imgByNum = {};
+      files.forEach(function(f){
+        var m = f.name.match(/^post-(\d+)\.(jpe?g|png|webp)$/i);
+        if(m) imgByNum[+m[1]] = dir + '/' + f.name;
+      });
 
-      box.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-bottom:14px">'
-        + d + ' · одобрено ' + nums.length + ', опубликовано ' + done.length + '</div>'
-        + nums.map(function(n){
-            return '<div id="pq-' + n + '" style="border:1px solid var(--border);border-radius:12px;'
-              + 'padding:14px 16px;margin-bottom:12px;background:'
-              + (done.indexOf(n) >= 0 ? 'rgba(16,185,129,.05)' : 'var(--card)') + '">'
-              + '<div class="loading" style="padding:6px"><div class="spinner"></div>Публикация ' + n + '…</div>'
-              + '</div>';
-          }).join('');
+      pqReadState(dir, key, function(done){
+        var wait = nums.filter(function(n){ return done.indexOf(n) < 0; });
+        if(cnt) cnt.textContent = 'одобрено ' + nums.length + ' · вышло ' + (nums.length - wait.length)
+          + ' · ждут ' + wait.length;
+        if(!wait.length){
+          if(list) list.innerHTML = '<div style="font-size:12px;color:#059669;padding:2px 0 4px">'
+            + '✅ Все одобренные публикации вышли</div>';
+          nextPlatform(pi + 1);
+          return;
+        }
+        if(list) list.innerHTML = wait.map(function(n){
+          var img = imgByNum[n];
+          var thumb = img
+            ? '<img src="' + postRawUrl(img) + '" data-path="' + img + '" onerror="pqImgFallback(this)" alt="" '
+              + 'style="width:64px;height:64px;object-fit:cover;border-radius:12px;display:block">'
+            : '<div style="width:64px;height:64px;border-radius:12px;background:var(--soft);display:flex;'
+              + 'align-items:center;justify-content:center;font-size:10px;color:var(--muted);text-align:center;'
+              + 'line-height:1.2">без<br>картинки</div>';
+          return '<div style="margin-bottom:10px">'
+            + '<div onclick="pqToggle(\'pq-txt-' + key + '-' + n + '\')" style="display:flex;align-items:center;'
+            + 'gap:14px;cursor:pointer">'
+            + '<div style="flex:0 0 64px">' + thumb + '</div>'
+            + '<div style="flex:1;min-width:0">'
+            + '<div id="pq-ttl-' + key + '-' + n + '" style="font-size:15px;line-height:1.35;color:var(--text)">'
+            + 'Публикация ' + n + '…</div>'
+            + '<div style="font-size:11px;color:var(--muted);margin-top:3px">№' + n + ' · в очереди</div>'
+            + '</div></div>'
+            + '<div id="pq-txt-' + key + '-' + n + '" style="display:none;margin:8px 0 4px 78px;font-size:13px;'
+            + 'line-height:1.7;color:var(--text);white-space:pre-line"></div>'
+            + '</div>';
+        }).join('');
 
-      // Тексты подтягиваем по одному, чтобы не упереться в лимит запросов
-      (function next(i){
-        if(i >= nums.length) return;
-        var n = nums[i];
-        pubFetchRaw(dir + '/post-' + n + '.md', function(st3, md){
-          var cell = document.getElementById('pq-' + n);
-          if(cell){
-            var out = done.indexOf(n) >= 0;
+        // Заголовки — по одному, чтобы не упереться в лимит запросов
+        (function nextPost(k){
+          if(k >= wait.length){ nextPlatform(pi + 1); return; }
+          var n = wait[k];
+          pubFetchRaw(dir + '/post-' + n + '.md', function(st3, md){
             var parts = postSplitMd(st3 === 200 ? md : '');
-            var img = imgByNum[n];
-            cell.innerHTML =
-                '<div style="display:flex;align-items:center;gap:9px;margin-bottom:10px">'
-              + '<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;'
-              + 'color:var(--muted)">Публикация ' + n + '</span>'
-              + '<span style="font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;background:'
-              + (out ? 'rgba(16,185,129,.12);color:#059669' : 'var(--soft);color:var(--blue)') + '">'
-              + (out ? '✅ опубликовано' : '🕒 в очереди') + '</span>'
-              + (img ? '' : '<span style="font-size:11px;color:#D97706">без картинки</span>')
-              + '</div>'
-              + (img ? '<img src="' + postRawUrl(img) + '" alt="Публикация ' + n + '" '
-                     + 'style="width:100%;max-width:420px;border-radius:10px;border:1px solid var(--border);'
-                     + 'margin-bottom:10px;display:block">' : '')
-              + (parts.title ? '<div style="font-size:14px;font-weight:800;color:var(--text);'
-                     + 'margin-bottom:8px;line-height:1.35">' + imgEsc(parts.title) + '</div>' : '')
-              + '<div style="font-size:13px;line-height:1.75;color:var(--text);white-space:pre-line">'
-              + imgEsc(parts.body || 'Текст не прочитан') + '</div>';
-          }
-          next(i + 1);
-        });
-      })(0);
+            var title = parts.title || (parts.body || '').split('\n')[0] || ('Публикация ' + n);
+            var t = document.getElementById('pq-ttl-' + key + '-' + n);
+            if(t) t.textContent = title;
+            var x = document.getElementById('pq-txt-' + key + '-' + n);
+            if(x) x.textContent = parts.body || 'Текст не прочитан';
+            nextPost(k + 1);
+          });
+        })(0);
+      });
     });
-  });
+  })(0);
 };
 
 function approvePost(btn, idx, platform, dateStr){
