@@ -14,6 +14,10 @@ from datetime import datetime, timezone, timedelta
 # — картинка грузится ключом VK_USER_TOKEN, если он задан: метод
 #   photos.getWallUploadServer не работает с ключом сообщества (ошибка 27);
 # — если картинку загрузить не удалось, пост выходит без неё.
+#
+# fix54b: фото пробуется загрузить всеми заданными ключами по очереди,
+#   в журнал пишется вид каждого ключа (пользователя или сообщества),
+#   сами ключи не выводятся.
 
 msk = timezone(timedelta(hours=3))
 now = datetime.now(msk)
@@ -160,37 +164,86 @@ def vk(method, params, use_token=None):
     return out.get('response')
 
 
+def token_kind(tok):
+    """Определяет вид ключа, не раскрывая его: метод
+    groups.getTokenPermissions отвечает только ключу сообщества."""
+    try:
+        vk('groups.getTokenPermissions', {}, tok)
+        return 'ключ сообщества'
+    except Exception:
+        pass
+    try:
+        u = vk('users.get', {}, tok)
+        if u:
+            return f"ключ пользователя (id{u[0].get('id')})"
+    except Exception as e:
+        return f'ключ не принят: {e}'
+    return 'вид ключа не определён'
+
+
+def photo_tokens():
+    """Ключи-кандидаты для загрузки фото: сначала VK_USER_TOKEN, потом основной."""
+    out, seen = [], set()
+    for name, tok in (('VK_USER_TOKEN', user_token), ('VK_ACCESS_TOKEN', token)):
+        if tok and tok not in seen:
+            seen.add(tok)
+            out.append((name, tok))
+    return out
+
+
+_tokens_checked = False
+
+
 def upload_photo(path):
     """Загрузка картинки на стену: получить сервер, отправить файл, сохранить.
-    Методы фото не работают с ключом сообщества, поэтому берём ключ пользователя,
-    если он задан отдельно."""
-    photo_token = user_token or token
-    srv = vk('photos.getWallUploadServer', {'group_id': group_id}, photo_token)
-    url = srv['upload_url']
+    Методы фото работают только с ключом пользователя-администратора,
+    поэтому пробуем по очереди все заданные ключи."""
+    global _tokens_checked
+    cands = photo_tokens()
+    if not _tokens_checked:
+        _tokens_checked = True
+        if not user_token:
+            print('   секрет VK_USER_TOKEN пуст или не передан в workflow')
+        for name, tok in cands:
+            print(f'   {name}: {token_kind(tok)}')
 
-    boundary = uuid.uuid4().hex
-    mime = mimetypes.guess_type(path.name)[0] or 'image/jpeg'
-    blob = bytearray()
-    blob += (f'--{boundary}\r\nContent-Disposition: form-data; name="photo"; '
-             f'filename="{path.name}"\r\nContent-Type: {mime}\r\n\r\n').encode()
-    blob += path.read_bytes()
-    blob += f'\r\n--{boundary}--\r\n'.encode()
-    req = urllib.request.Request(
-        url, data=bytes(blob),
-        headers={'Content-Type': f'multipart/form-data; boundary={boundary}'})
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        up = json.loads(resp.read())
-    if not up.get('photo') or up.get('photo') == '[]':
-        raise RuntimeError(f'ВК не принял файл при загрузке: {up}')
+    errors = []
+    for name, tok in cands:
+        try:
+            srv = vk('photos.getWallUploadServer', {'group_id': group_id}, tok)
+        except Exception as e:
+            errors.append(f'{name}: {e}')
+            continue
+        url = srv['upload_url']
 
-    saved = vk('photos.saveWallPhoto', {
-        'group_id': group_id,
-        'photo': up['photo'],
-        'server': up['server'],
-        'hash': up['hash'],
-    }, photo_token)
-    ph = saved[0]
-    return f"photo{ph['owner_id']}_{ph['id']}"
+        boundary = uuid.uuid4().hex
+        mime = mimetypes.guess_type(path.name)[0] or 'image/jpeg'
+        blob = bytearray()
+        blob += (f'--{boundary}\r\nContent-Disposition: form-data; name="photo"; '
+                 f'filename="{path.name}"\r\nContent-Type: {mime}\r\n\r\n').encode()
+        blob += path.read_bytes()
+        blob += f'\r\n--{boundary}--\r\n'.encode()
+        req = urllib.request.Request(
+            url, data=bytes(blob),
+            headers={'Content-Type': f'multipart/form-data; boundary={boundary}'})
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            up = json.loads(resp.read())
+        if not up.get('photo') or up.get('photo') == '[]':
+            raise RuntimeError(f'ВК не принял файл при загрузке: {up}')
+
+        saved = vk('photos.saveWallPhoto', {
+            'group_id': group_id,
+            'photo': up['photo'],
+            'server': up['server'],
+            'hash': up['hash'],
+        }, tok)
+        ph = saved[0]
+        print(f'   фото загружено ключом {name}')
+        return f"photo{ph['owner_id']}_{ph['id']}"
+
+    raise RuntimeError('ни один ключ не подошёл для загрузки фото — ' + ' | '.join(errors)
+                       + '. Нужен ключ пользователя-администратора сообщества с правом photos '
+                       + 'в секрете VK_USER_TOKEN')
 
 
 def save_state():
