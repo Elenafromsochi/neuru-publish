@@ -15,6 +15,9 @@ from datetime import datetime, timezone, timedelta
 #   photos.getWallUploadServer не работает с ключом сообщества (ошибка 27);
 # — если картинку загрузить не удалось, пост выходит без неё.
 #
+# fix55: окно публикаций 10:00–21:00 МСК, по одному посту в час с 10:00;
+#   если постов больше 12, они равномерно сгущаются внутри окна.
+#
 # fix54b: фото пробуется загрузить всеми заданными ключами по очереди,
 #   в журнал пишется вид каждого ключа (пользователя или сообщества),
 #   сами ключи не выводятся.
@@ -29,7 +32,8 @@ API = 'https://api.vk.com/method/'
 API_VERSION = '5.199'
 TEXT_LIMIT = 15000
 
-FIRST_HOUR = int(os.environ.get('POST_FIRST_HOUR', '12'))
+FIRST_HOUR = int(os.environ.get('POST_FIRST_HOUR', '10'))
+LAST_HOUR = int(os.environ.get('POST_LAST_HOUR', '21'))
 MAX_PER_RUN = max(1, int(os.environ.get('POST_MAX_PER_RUN', '1')))
 MIN_GAP_MIN = max(0, int(os.environ.get('POST_MIN_GAP_MIN', '45')))
 GAP_SEC = int(os.environ.get('POST_GAP_SEC', '30'))
@@ -72,14 +76,29 @@ if not pending:
     exit(0)
 
 hour = now.hour
-due = 0 if hour < FIRST_HOUR else min(hour - FIRST_HOUR + 1, len(all_posts))
+
+
+def slot_hour(k, total):
+    """Час выхода k-го поста дня (k с 1): по одному в час с FIRST_HOUR.
+    Если постов больше, чем часов в окне, они равномерно сгущаются,
+    и последний всё равно выходит не позже LAST_HOUR."""
+    span = max(1, LAST_HOUR - FIRST_HOUR + 1)
+    return FIRST_HOUR + ((k - 1) * span) // max(total, span)
+
+
+total = len(all_posts)
+slots = [slot_hour(k, total) for k in range(1, total + 1)]
+due = sum(1 for h in slots if h <= hour)
 behind = due - len(published)
 
 print(f'Час {hour}:00 МСК · одобрено {len(all_posts)}, опубликовано {len(published)}, '
       f'по расписанию должно быть {due}')
 
 if behind <= 0:
-    print(f'По расписанию публиковать пока нечего (первый пост в {FIRST_HOUR}:00, дальше по одному в час)')
+    nxt = next((h for h in slots if h > hour), None)
+    print(f'По расписанию публиковать пока нечего. Окно {FIRST_HOUR}:00–{LAST_HOUR}:00, '
+          f'часы выхода: {", ".join(str(h) for h in slots)}'
+          + (f'; следующий пост в {nxt}:00' if nxt is not None else ''))
     exit(0)
 
 if last_at and MIN_GAP_MIN:
