@@ -4,6 +4,9 @@ from datetime import datetime, timezone, timedelta
 
 # Автопостинг в сообщество ВКонтакте.
 #
+# fix59: картинка перед загрузкой перекодируется в JPEG до 2048 px (Pillow),
+#   в журнал пишется её реальный формат и размер.
+#
 # fix58: если загрузка на стену недоступна (ключ сообщества, ошибка 27),
 #   картинка грузится через сервер фото для сообщений — этот путь работает
 #   с ключом сообщества. Нужны только VK_ACCESS_TOKEN и VK_GROUP_ID.
@@ -198,7 +201,10 @@ def prepare(md_path, num, folder):
             text = text[:para_start] + text[para_end:]
             print(f'   пометки [В КОММЕНТАРИЙ] нет — вынес ссылку в комментарий сам: {url[:60]}')
         else:
-            # fix58: если загрузка на стену недоступна (ключ сообщества, ошибка 27),
+            # fix59: картинка перед загрузкой перекодируется в JPEG до 2048 px (Pillow),
+#   в журнал пишется её реальный формат и размер.
+#
+# fix58: если загрузка на стену недоступна (ключ сообщества, ошибка 27),
 #   картинка грузится через сервер фото для сообщений — этот путь работает
 #   с ключом сообщества. Нужны только VK_ACCESS_TOKEN и VK_GROUP_ID.
 #
@@ -271,13 +277,45 @@ def photo_tokens():
     return out
 
 
+def image_payload(path):
+    """fix59: картинку перед отправкой приводим к обычному JPEG до 2048 px.
+    ВК отвечает photo: [] на файлы, чьё содержимое не совпадает с расширением
+    (JPEG или WebP внутри .png), на повреждённые и на слишком большие."""
+    raw = path.read_bytes()
+    kind = ('png' if raw[:8] == b'\x89PNG\r\n\x1a\n' else
+            'jpeg' if raw[:3] == b'\xff\xd8\xff' else
+            'webp' if raw[:4] == b'RIFF' and raw[8:12] == b'WEBP' else
+            'gif' if raw[:4] == b'GIF8' else 'неизвестный')
+    info = f'{path.name}: {len(raw) // 1024} КБ, формат по содержимому — {kind}'
+    try:
+        from PIL import Image
+        import io
+        im = Image.open(io.BytesIO(raw))
+        info += f', {im.width}×{im.height}'
+        im = im.convert('RGB')
+        im.thumbnail((2048, 2048))
+        buf = io.BytesIO()
+        im.save(buf, 'JPEG', quality=90)
+        print(f'   {info} → JPEG {im.width}×{im.height}, {buf.tell() // 1024} КБ')
+        return buf.getvalue(), 'photo.jpg', 'image/jpeg'
+    except ImportError:
+        print(f'   {info} (Pillow не установлен — отправляю как есть)')
+    except Exception as e:
+        print(f'   {info} — файл не открылся как изображение: {e}')
+    if kind == 'неизвестный':
+        head = raw[:60].decode('utf-8', 'replace').replace('\n', ' ')
+        raise RuntimeError(f'{path.name} — не картинка, начало файла: {head!r}')
+    ext = {'png': 'png', 'jpeg': 'jpg', 'webp': 'webp', 'gif': 'gif'}[kind]
+    return raw, f'photo.{ext}', 'image/' + kind
+
+
 def send_file(upload_url, path):
+    data, fname, mime = image_payload(path)
     boundary = uuid.uuid4().hex
-    mime = mimetypes.guess_type(path.name)[0] or 'image/jpeg'
     blob = bytearray()
     blob += (f'--{boundary}\r\nContent-Disposition: form-data; name="photo"; '
-             f'filename="{path.name}"\r\nContent-Type: {mime}\r\n\r\n').encode()
-    blob += path.read_bytes()
+             f'filename="{fname}"\r\nContent-Type: {mime}\r\n\r\n').encode()
+    blob += data
     blob += f'\r\n--{boundary}--\r\n'.encode()
     req = urllib.request.Request(
         upload_url, data=bytes(blob),
