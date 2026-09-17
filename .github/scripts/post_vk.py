@@ -4,6 +4,10 @@ from datetime import datetime, timezone, timedelta
 
 # Автопостинг в сообщество ВКонтакте.
 #
+# fix58: если загрузка на стену недоступна (ключ сообщества, ошибка 27),
+#   картинка грузится через сервер фото для сообщений — этот путь работает
+#   с ключом сообщества. Нужны только VK_ACCESS_TOKEN и VK_GROUP_ID.
+#
 # fix57: ссылка в первом комментарии есть всегда: если в посте нет строки
 #   [В КОММЕНТАРИЙ] и ссылки, ставится стандартная ссылка с UTM.
 #   Комментарий пробуется обоими ключами, ошибка видна в Annotations.
@@ -194,7 +198,11 @@ def prepare(md_path, num, folder):
             text = text[:para_start] + text[para_end:]
             print(f'   пометки [В КОММЕНТАРИЙ] нет — вынес ссылку в комментарий сам: {url[:60]}')
         else:
-            # fix57: ни пометки, ни ссылки — комментарий всё равно нужен
+            # fix58: если загрузка на стену недоступна (ключ сообщества, ошибка 27),
+#   картинка грузится через сервер фото для сообщений — этот путь работает
+#   с ключом сообщества. Нужны только VK_ACCESS_TOKEN и VK_GROUP_ID.
+#
+# fix57: ни пометки, ни ссылки — комментарий всё равно нужен
             day_tag = folder.parent.name[:2]
             url = ('https://neuru.ru/ai-porter?utm_source=vk&utm_medium=publication'
                    f'&utm_campaign=pub&utm_content={day_tag}-{num}')
@@ -263,6 +271,48 @@ def photo_tokens():
     return out
 
 
+def send_file(upload_url, path):
+    boundary = uuid.uuid4().hex
+    mime = mimetypes.guess_type(path.name)[0] or 'image/jpeg'
+    blob = bytearray()
+    blob += (f'--{boundary}\r\nContent-Disposition: form-data; name="photo"; '
+             f'filename="{path.name}"\r\nContent-Type: {mime}\r\n\r\n').encode()
+    blob += path.read_bytes()
+    blob += f'\r\n--{boundary}--\r\n'.encode()
+    req = urllib.request.Request(
+        upload_url, data=bytes(blob),
+        headers={'Content-Type': f'multipart/form-data; boundary={boundary}'})
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        up = json.loads(resp.read())
+    if not up.get('photo') or up.get('photo') == '[]':
+        raise RuntimeError(f'ВК не принял файл при загрузке: {up}')
+    return up
+
+
+def upload_via_messages(path):
+    """fix58: загрузка через сервер фото для сообщений. Этот путь работает
+    с ключом сообщества — те же два секрета, что и для текста."""
+    last = None
+    for params in ({}, {'peer_id': 0}):
+        try:
+            srv = vk('photos.getMessagesUploadServer', params, token)
+            break
+        except Exception as e:
+            last = e
+    else:
+        raise RuntimeError(f'сервер загрузки для сообщений не выдан: {last}')
+    up = send_file(srv['upload_url'], path)
+    saved = vk('photos.saveMessagesPhoto', {
+        'photo': up['photo'], 'server': up['server'], 'hash': up['hash'],
+    }, token)
+    ph = saved[0]
+    att = f"photo{ph['owner_id']}_{ph['id']}"
+    if ph.get('access_key'):
+        att += '_' + ph['access_key']
+    print('   фото загружено через сервер сообщений ключом VK_ACCESS_TOKEN')
+    return att
+
+
 _tokens_checked = False
 
 
@@ -274,8 +324,6 @@ def upload_photo(path):
     cands = photo_tokens()
     if not _tokens_checked:
         _tokens_checked = True
-        if not user_token:
-            print('   секрет VK_USER_TOKEN пуст или не передан в workflow')
         for name, tok in cands:
             print(f'   {name}: {token_kind(tok)}')
 
@@ -286,22 +334,7 @@ def upload_photo(path):
         except Exception as e:
             errors.append(f'{name}: {e}')
             continue
-        url = srv['upload_url']
-
-        boundary = uuid.uuid4().hex
-        mime = mimetypes.guess_type(path.name)[0] or 'image/jpeg'
-        blob = bytearray()
-        blob += (f'--{boundary}\r\nContent-Disposition: form-data; name="photo"; '
-                 f'filename="{path.name}"\r\nContent-Type: {mime}\r\n\r\n').encode()
-        blob += path.read_bytes()
-        blob += f'\r\n--{boundary}--\r\n'.encode()
-        req = urllib.request.Request(
-            url, data=bytes(blob),
-            headers={'Content-Type': f'multipart/form-data; boundary={boundary}'})
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            up = json.loads(resp.read())
-        if not up.get('photo') or up.get('photo') == '[]':
-            raise RuntimeError(f'ВК не принял файл при загрузке: {up}')
+        up = send_file(srv['upload_url'], path)
 
         saved = vk('photos.saveWallPhoto', {
             'group_id': group_id,
@@ -313,9 +346,11 @@ def upload_photo(path):
         print(f'   фото загружено ключом {name}')
         return f"photo{ph['owner_id']}_{ph['id']}"
 
-    raise RuntimeError('ни один ключ не подошёл для загрузки фото — ' + ' | '.join(errors)
-                       + '. Нужен ключ пользователя-администратора сообщества с правом photos '
-                       + 'в секрете VK_USER_TOKEN')
+    try:
+        return upload_via_messages(path)
+    except Exception as e:
+        errors.append(f'сервер сообщений: {e}')
+    raise RuntimeError('картинку загрузить не удалось — ' + ' | '.join(errors))
 
 
 
@@ -358,7 +393,15 @@ def publish(md_path, num, folder, day):
     if attachment:
         params['attachments'] = attachment
 
-    res = vk('wall.post', params)
+    try:
+        res = vk('wall.post', params)
+    except Exception as e:
+        if not attachment:
+            raise
+        print(f'::warning title=VK Posting::стена не приняла картинку к посту {label} — {e}')
+        print(f'   ⚠ стена не приняла картинку, публикую без неё: {e}')
+        params.pop('attachments', None)
+        res = vk('wall.post', params)
     post_id = res.get('post_id')
     print(f'   опубликовано: https://vk.com/wall-{group_id}_{post_id}')
 
