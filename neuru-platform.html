@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-17-fix55 -->
+<!DOCTYPE html><!-- v2026-09-17-fix56 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -446,7 +446,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 17.09 · fix55</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 17.09 · fix56</div>
   </div>
 </aside>
 
@@ -807,7 +807,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
 <!-- ══ ПУБЛИКАЦИИ: ПОСТИНГ ══ -->
 <section class="section" id="sec-pub-post">
   <div class="sec-title">ИИ-<span>Постинг</span></div>
-  <div class="sec-desc">Публикация одобренных материалов. Telegram и ВКонтакте выходят автоматически по расписанию, ВКонтакте — по одному посту в час с 10:00 до 21:00 по Москве; кнопки ниже публикуют следующий одобренный пост, не дожидаясь расписания. Остальные площадки пока публикуются вручную — текст берите кнопкой «Скопировать» в ИИ-Копирайтере-Публицисте.</div>
+  <div class="sec-desc">Публикация одобренных материалов. Telegram и ВКонтакте выходят автоматически по расписанию, ВКонтакте — по одному посту в час с 10:00 до 21:00 по Москве, начиная с неопубликованных за прошлые дни; кнопки ниже публикуют следующий одобренный пост, не дожидаясь расписания. Остальные площадки пока публикуются вручную — текст берите кнопкой «Скопировать» в ИИ-Копирайтере-Публицисте.</div>
 
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px">
     <div class="card" style="text-align:center;padding:20px">
@@ -4864,25 +4864,26 @@ function postSplitMd(md){
   return { title: title, body: body };
 }
 
-/* fix55: очередь постинга по всем площадкам.
+/* fix56: очередь постинга по всем площадкам.
    Порядок площадок — как в Стратеге- и Копирайтере-Публицисте.
-   Показываются одобренные публикации за сегодня, которые ещё не вышли:
-   слева миниатюра, справа заголовок. По клику раскрывается текст. */
+   Показываются одобренные публикации, которые ещё не вышли: слева миниатюра,
+   справа заголовок, по клику раскрывается текст. У ВКонтакте в очередь
+   попадают и неопубликованные посты за прошлые дни (до 14 дней) —
+   скрипт постинга выпускает их первыми, от старых к новым. */
 var PQ_PLATFORMS = [
   ['tg','✈️','Telegram'], ['dzen','📰','Дзен'], ['vk','💙','ВКонтакте'],
   ['tenchat','🤝','ТенЧат'], ['tj','🍋','Т—Ж'], ['vc','🔷','VC.ru'],
   ['mitt','🏨','MITT Connect'], ['tilda','🌐','Сайт Тильда']
 ];
+var PQ_BACKLOG = { vk: 14 };   // площадки, у которых очередь переходит на следующие дни
 
-// Картинка: сначала прямой ссылкой, если не открылась — через API с токеном
 window.pqImgFallback = function(img){
   if(img.getAttribute('data-tried')) { img.style.display = 'none'; return; }
   img.setAttribute('data-tried', '1');
   var path = img.getAttribute('data-path');
-  var tok = getToken();
   fetch('https://api.github.com/repos/' + PUB_REPO + '/contents/'
         + path.split('/').map(encodeURIComponent).join('/') + '?ref=main',
-        { headers: { 'Authorization': 'token ' + tok, 'Accept': 'application/vnd.github.raw' } })
+        { headers: { 'Authorization': 'token ' + getToken(), 'Accept': 'application/vnd.github.raw' } })
     .then(function(r){ if(!r.ok) throw new Error(r.status); return r.blob(); })
     .then(function(b){ img.src = URL.createObjectURL(b); })
     .catch(function(){ img.style.display = 'none'; });
@@ -4895,7 +4896,7 @@ window.pqToggle = function(id){
 
 function pqReadState(dir, key, cb){
   var names = ['state-' + key + '.json', 'state.json'];
-  if(key === 'tg') names.push('state-dzen.json', 'state-tg.json');
+  if(key === 'tg') names.push('state-dzen.json');
   (function next(i){
     if(i >= names.length){ cb([]); return; }
     pubFetchRaw(dir + '/' + names[i], function(st, raw){
@@ -4907,6 +4908,50 @@ function pqReadState(dir, key, cb){
   })(0);
 }
 
+function pqDmyToNum(s){
+  var m = String(s).match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  return m ? +(m[3] + m[2] + m[1]) : 0;
+}
+
+// Список дат-папок в social/posting, чтобы найти хвосты прошлых дней
+function pqListDates(cb){
+  pubFetchAPI('social/posting', function(status, text){
+    var out = [];
+    if(status === 200){
+      try {
+        (JSON.parse(text) || []).forEach(function(f){
+          if(f.type === 'dir' && /^\d{2}\.\d{2}\.\d{4}$/.test(f.name)) out.push(f.name);
+        });
+      } catch(e){}
+    }
+    cb(out);
+  });
+}
+
+// Читает одну папку дня: какие посты ждут и какие у них картинки
+function pqReadDir(dir, key, cb){
+  pubFetchAPI(dir, function(status, text){
+    var files = [];
+    if(status === 200){ try { files = JSON.parse(text) || []; } catch(e){} }
+    var nums = files.filter(function(f){ return /^post-\d+\.md$/.test(f.name); })
+                    .map(function(f){ return parseInt(f.name.match(/\d+/)[0], 10); })
+                    .sort(function(a,b){ return a - b; });
+    if(!nums.length){ cb({ total: 0, items: [] }); return; }
+    var imgByNum = {};
+    files.forEach(function(f){
+      var m = f.name.match(/^post-(\d+)\.(jpe?g|png|webp)$/i);
+      if(m) imgByNum[+m[1]] = dir + '/' + f.name;
+    });
+    pqReadState(dir, key, function(done){
+      cb({
+        total: nums.length,
+        items: nums.filter(function(n){ return done.indexOf(n) < 0; })
+                   .map(function(n){ return { dir: dir, num: n, img: imgByNum[n] || '' }; })
+      });
+    });
+  });
+}
+
 window.loadPostQueue = function(){
   var box = document.getElementById('pub-queue');
   if(!box) return;
@@ -4915,12 +4960,13 @@ window.loadPostQueue = function(){
     return;
   }
   var d = mskDMY();
+  var todayNum = pqDmyToNum(d);
   box.style.textAlign = 'left';
   box.style.padding = '4px 0 0';
-  box.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-bottom:12px">Очередь на ' + d
-    + ' — одобренные публикации, которые ещё не вышли</div>'
+  box.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-bottom:12px">Одобренные публикации, '
+    + 'которые ещё не вышли. У ВКонтакте — вместе с хвостами прошлых дней.</div>'
     + PQ_PLATFORMS.map(function(p){
-        return '<div id="pq-grp-' + p[0] + '" style="margin-bottom:18px">'
+        return '<div style="margin-bottom:18px">'
           + '<div style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--text);'
           + 'padding-bottom:8px;border-bottom:1px solid var(--border);margin-bottom:10px">'
           + '<span>' + p[1] + '</span><span>' + p[2] + '</span>'
@@ -4928,82 +4974,97 @@ window.loadPostQueue = function(){
           + '</div><div id="pq-list-' + p[0] + '"></div></div>';
       }).join('');
 
-  (function nextPlatform(pi){
-    if(pi >= PQ_PLATFORMS.length) return;
-    var key = PQ_PLATFORMS[pi][0];
-    var dir = 'social/posting/' + d + '/' + key;
-    var cnt = document.getElementById('pq-cnt-' + key);
-    var list = document.getElementById('pq-list-' + key);
+  pqListDates(function(allDates){
+    (function nextPlatform(pi){
+      if(pi >= PQ_PLATFORMS.length) return;
+      var key = PQ_PLATFORMS[pi][0];
+      var cnt = document.getElementById('pq-cnt-' + key);
+      var list = document.getElementById('pq-list-' + key);
 
-    pubFetchAPI(dir, function(status, text){
-      var files = [];
-      if(status === 200){ try { files = JSON.parse(text) || []; } catch(e){} }
-      var nums = files.filter(function(f){ return /^post-\d+\.md$/.test(f.name); })
-                      .map(function(f){ return parseInt(f.name.match(/\d+/)[0], 10); })
-                      .sort(function(a,b){ return a - b; });
-      if(!nums.length){
-        if(cnt) cnt.textContent = 'нет одобренных';
-        if(list) list.innerHTML = '<div style="font-size:12px;color:var(--light);padding:2px 0 4px">'
-          + 'Одобрите публикации в ИИ-Копирайтере-Публицисте — они появятся здесь.</div>';
-        nextPlatform(pi + 1);
-        return;
+      var dates = [d];
+      if(PQ_BACKLOG[key]){
+        dates = allDates.filter(function(x){
+          var n = pqDmyToNum(x);
+          if(n > todayNum) return false;
+          var dt = new Date(+x.slice(6), +x.slice(3,5) - 1, +x.slice(0,2));
+          var td = new Date(+d.slice(6), +d.slice(3,5) - 1, +d.slice(0,2));
+          return (td - dt) / 864e5 <= PQ_BACKLOG[key];
+        }).sort(function(a,b){ return pqDmyToNum(a) - pqDmyToNum(b); });
+        if(dates.indexOf(d) < 0) dates.push(d);
       }
-      var imgByNum = {};
-      files.forEach(function(f){
-        var m = f.name.match(/^post-(\d+)\.(jpe?g|png|webp)$/i);
-        if(m) imgByNum[+m[1]] = dir + '/' + f.name;
-      });
 
-      pqReadState(dir, key, function(done){
-        var wait = nums.filter(function(n){ return done.indexOf(n) < 0; });
-        if(cnt) cnt.textContent = 'одобрено ' + nums.length + ' · вышло ' + (nums.length - wait.length)
-          + ' · ждут ' + wait.length;
-        if(!wait.length){
-          if(list) list.innerHTML = '<div style="font-size:12px;color:#059669;padding:2px 0 4px">'
-            + '✅ Все одобренные публикации вышли</div>';
+      var items = [], todayTotal = 0, todayWait = 0;
+      (function nextDate(di){
+        if(di < dates.length){
+          pqReadDir('social/posting/' + dates[di] + '/' + key, key, function(r){
+            r.items.forEach(function(it){ it.date = dates[di]; });
+            items = items.concat(r.items);
+            if(dates[di] === d){ todayTotal = r.total; todayWait = r.items.length; }
+            nextDate(di + 1);
+          });
+          return;
+        }
+        render();
+      })(0);
+
+      function render(){
+        var old = items.length - todayWait;
+        if(cnt){
+          cnt.textContent = (todayTotal
+              ? 'сегодня: одобрено ' + todayTotal + ' · вышло ' + (todayTotal - todayWait) + ' · ждут ' + todayWait
+              : 'сегодня не одобрено')
+            + (old ? ' · с прошлых дней ' + old : '');
+        }
+        if(!items.length){
+          if(list) list.innerHTML = todayTotal
+            ? '<div style="font-size:12px;color:#059669;padding:2px 0 4px">✅ Все одобренные публикации вышли</div>'
+            : '<div style="font-size:12px;color:var(--light);padding:2px 0 4px">'
+              + 'Одобрите публикации в ИИ-Копирайтере-Публицисте — они появятся здесь.</div>';
           nextPlatform(pi + 1);
           return;
         }
-        if(list) list.innerHTML = wait.map(function(n){
-          var img = imgByNum[n];
-          var thumb = img
-            ? '<img src="' + postRawUrl(img) + '" data-path="' + img + '" onerror="pqImgFallback(this)" alt="" '
+        if(list) list.innerHTML = items.map(function(it, k){
+          var id = key + '-' + k;
+          var past = it.date !== d;
+          var thumb = it.img
+            ? '<img src="' + postRawUrl(it.img) + '" data-path="' + it.img + '" onerror="pqImgFallback(this)" alt="" '
               + 'style="width:64px;height:64px;object-fit:cover;border-radius:12px;display:block">'
             : '<div style="width:64px;height:64px;border-radius:12px;background:var(--soft);display:flex;'
               + 'align-items:center;justify-content:center;font-size:10px;color:var(--muted);text-align:center;'
               + 'line-height:1.2">без<br>картинки</div>';
           return '<div style="margin-bottom:10px">'
-            + '<div onclick="pqToggle(\'pq-txt-' + key + '-' + n + '\')" style="display:flex;align-items:center;'
-            + 'gap:14px;cursor:pointer">'
+            + '<div onclick="pqToggle(\'pq-txt-' + id + '\')" style="display:flex;align-items:center;gap:14px;cursor:pointer">'
             + '<div style="flex:0 0 64px">' + thumb + '</div>'
             + '<div style="flex:1;min-width:0">'
-            + '<div id="pq-ttl-' + key + '-' + n + '" style="font-size:15px;line-height:1.35;color:var(--text)">'
-            + 'Публикация ' + n + '…</div>'
-            + '<div style="font-size:11px;color:var(--muted);margin-top:3px">№' + n + ' · в очереди</div>'
+            + '<div id="pq-ttl-' + id + '" style="font-size:15px;line-height:1.35;color:var(--text)">Публикация '
+            + it.num + '…</div>'
+            + '<div style="font-size:11px;margin-top:3px;color:' + (past ? '#D97706' : 'var(--muted)') + '">'
+            + (past ? 'за ' + it.date.slice(0,5) + ' · ' : '') + '№' + it.num + ' · '
+            + (k === 0 && PQ_BACKLOG[key] ? 'выйдет следующим' : 'в очереди') + '</div>'
             + '</div></div>'
-            + '<div id="pq-txt-' + key + '-' + n + '" style="display:none;margin:8px 0 4px 78px;font-size:13px;'
+            + '<div id="pq-txt-' + id + '" style="display:none;margin:8px 0 4px 78px;font-size:13px;'
             + 'line-height:1.7;color:var(--text);white-space:pre-line"></div>'
             + '</div>';
         }).join('');
 
-        // Заголовки — по одному, чтобы не упереться в лимит запросов
         (function nextPost(k){
-          if(k >= wait.length){ nextPlatform(pi + 1); return; }
-          var n = wait[k];
-          pubFetchRaw(dir + '/post-' + n + '.md', function(st3, md){
+          if(k >= items.length){ nextPlatform(pi + 1); return; }
+          var it = items[k], id = key + '-' + k;
+          pubFetchRaw(it.dir + '/post-' + it.num + '.md', function(st3, md){
             var parts = postSplitMd(st3 === 200 ? md : '');
-            var title = parts.title || (parts.body || '').split('\n')[0] || ('Публикация ' + n);
-            var t = document.getElementById('pq-ttl-' + key + '-' + n);
+            var title = parts.title || (parts.body || '').split('\n')[0] || ('Публикация ' + it.num);
+            var t = document.getElementById('pq-ttl-' + id);
             if(t) t.textContent = title;
-            var x = document.getElementById('pq-txt-' + key + '-' + n);
+            var x = document.getElementById('pq-txt-' + id);
             if(x) x.textContent = parts.body || 'Текст не прочитан';
             nextPost(k + 1);
           });
         })(0);
-      });
-    });
-  })(0);
+      }
+    })(0);
+  });
 };
+
 
 function approvePost(btn, idx, platform, dateStr){
   var cache = _copyPlatformCache[dateStr];
