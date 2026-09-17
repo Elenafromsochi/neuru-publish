@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-09-17-fix56 -->
+<!DOCTYPE html><!-- v2026-09-17-fix57 -->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -446,7 +446,7 @@ var anAnalysisCache = {}; // кеш: analysis filename → md content
     Админ-панель
   </a>
 <div class="sb-bottom">
-        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 17.09 · fix56</div>
+        <div style="margin-top:10px;font-size:10px;opacity:.5">НЭЙРУ © 2026</div><div id="build-ver" style="margin-top:6px;font-size:11px;font-weight:700;color:#10B981">&#10003; сборка 17.09 · fix57</div>
   </div>
 </aside>
 
@@ -6992,6 +6992,29 @@ function renderAnMd(text){
     return m ? m[0].trim() : '';
   }
 
+  var SCHEME_ROLES = ['Проблема', 'Решение', 'Продукт', 'Результат'];
+
+  // Заголовок статьи → крупный заголовок + подзаголовок (как в иллюстраторе)
+  function splitTitle(t){
+    t = String(t || '').replace(/\s+/g, ' ').trim().replace(/[.!]+$/, '');
+    if(!t) return ['', ''];
+    var words = t.split(' ');
+    if(words.length < 2) return [t, ''];
+    var mid = t.length / 2, best = -1, bestD = Infinity, m;
+    var re = /[:?—–,]\s/g;
+    while((m = re.exec(t))){
+      var pos = m.index + 1, d = Math.abs(pos - mid);
+      if(d < bestD && d <= t.length * 0.3){ bestD = d; best = pos; }
+    }
+    var a, b;
+    if(best > 0){ a = t.slice(0, best); b = t.slice(best); }
+    else { var k = Math.ceil(words.length / 2); a = words.slice(0, k).join(' '); b = words.slice(k).join(' '); }
+    a = a.replace(/[\s:,—–]+$/, '').trim();
+    b = b.replace(/^[\s:,—–]+/, '').trim();
+    if(b) b = b.charAt(0).toUpperCase() + b.slice(1);
+    return [a, b];
+  }
+
   function cardsToText(cards){
     return (cards || []).map(function(c){
       return [c.title || '', c.text || '', c.pill || ''].join(' | ').replace(/(\s\|\s)+$/,'');
@@ -7022,7 +7045,8 @@ function renderAnMd(text){
     };
     var title = pubTitle();
     window._imgStep.cover = { title: title, accent: guessAccent(title) };
-    window._imgStep.scheme = { badge: 'ИИ-ПОРТЬЕ', headline: '', subline: '', cardsText: '' };
+    var parts = splitTitle(title);
+    window._imgStep.scheme = { badge: 'ИИ-ПОРТЬЕ', headline: parts[0], subline: parts[1], cardsText: '' };
 
     var ov = el('img-step-ov');
     if(!ov){
@@ -7071,7 +7095,16 @@ function renderAnMd(text){
     return {};
   }
 
-  window.ilxSetStyle = function(v){ sync(); S().style = v; render(); };
+  window.ilxSetStyle = function(v){
+    sync(); S().style = v; render();
+    var s = S();
+    // Инфографика: карточки выделяются из текста сразу, без нажатия кнопки
+    if(v === 'scheme' && !String(s.scheme.cardsText || '').trim() && !s.autoCardsStarted){
+      s.autoCardsStarted = true;
+      var b = document.querySelector('#img-step-ov button[onclick^="ilxImprove"]');
+      if(b) window.ilxImprove(b, true);
+    }
+  };
   window.ilxSetSize  = function(v){ sync(); S().size = v; render(); };
   window.imgSetStyle = window.ilxSetStyle;
 
@@ -7219,16 +7252,16 @@ function renderAnMd(text){
       html += '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">'
         + '<div style="font-size:12px;font-weight:600;color:var(--muted)">Текст инфографики</div>'
         + field('ilx-sch-badge', 'Плашка сверху', s.scheme.badge, 'ОТДЕЛ ПУБЛИКАЦИЙ')
-        + field('ilx-sch-head', 'Крупный заголовок — 2–4 слова, число в начале выделится', s.scheme.headline, '4 ИИ-агента')
-        + field('ilx-sch-sub', 'Подзаголовок', s.scheme.subline, 'которые создают контент, привлекающий клиентов')
+        + field('ilx-sch-head', 'Заголовок — первая половина заголовка статьи', s.scheme.headline, 'Что происходит с обращениями гостей')
+        + field('ilx-sch-sub', 'Подзаголовок — вторая половина заголовка статьи', s.scheme.subline, 'В 3 часа ночи')
         + '<label style="display:block;font-size:11px;font-weight:600;color:var(--muted);margin:10px 0 4px">'
-        + 'Карточки — 3 или 4 строки: название | описание | плашка</label>'
+        + 'Карточки — 4 строки: Проблема, Решение, Продукт, Результат. Формат: название | описание | плашка</label>'
         + '<textarea id="ilx-sch-cards" style="width:100%;box-sizing:border-box;min-height:92px;padding:9px 11px;'
         + 'border:1px solid var(--border);border-radius:9px;font-size:12px;line-height:1.6;font-family:inherit;'
-        + 'background:var(--card);color:var(--text);resize:vertical" placeholder="ИИ-новостник | Следит за трендами и новостями ниши | Актуальный контент каждый день">'
+        + 'background:var(--card);color:var(--text);resize:vertical" placeholder="Проблема | … | …&#10;Решение | … | …&#10;Продукт | … | …&#10;Результат | … | …">'
         + esc(s.scheme.cardsText) + '</textarea>'
-        + '<div style="font-size:11px;color:var(--muted);margin-top:4px">Пустые поля заполнит иллюстратор из текста публикации — '
-        + 'кнопкой «Заполнить из публикации» или сам при генерации.</div></div>';
+        + '<div style="font-size:11px;color:var(--muted);margin-top:4px">Карточки иллюстратор выделяет из текста публикации '
+        + 'автоматически при выборе «Инфографики». Повторить — кнопкой «Заполнить из публикации».</div></div>';
     }
 
     var isPhoto = s.style === 'photo';
@@ -7371,12 +7404,12 @@ function renderAnMd(text){
     });
   }
 
-  window.ilxImprove = function(btn){
+  window.ilxImprove = function(btn, auto){
     sync();
     var s = S();
     var ta = el('img-prompt');
     var old = btn.textContent;
-    btn.textContent = 'Работаю…'; btn.disabled = true;
+    btn.textContent = auto ? 'Выделяю карточки…' : 'Работаю…'; btn.disabled = true;
     function stop(){ btn.textContent = old; btn.disabled = false; }
 
     run('prompt', ta ? ta.value : '', '', function(j){
@@ -7390,9 +7423,9 @@ function renderAnMd(text){
           if(L.title) s.cover.title = L.title;
           if(L.accent) s.cover.accent = L.accent;
         } else {
-          if(L.badge) s.scheme.badge = L.badge;
-          if(L.headline) s.scheme.headline = L.headline;
-          if(L.subline) s.scheme.subline = L.subline;
+          if(L.badge && !String(s.scheme.badge || '').trim()) s.scheme.badge = L.badge;
+          if(L.headline && !String(s.scheme.headline || '').trim()) s.scheme.headline = L.headline;
+          if(L.subline && !String(s.scheme.subline || '').trim()) s.scheme.subline = L.subline;
           if(L.cards && L.cards.length) s.scheme.cardsText = cardsToText(L.cards);
         }
       }
