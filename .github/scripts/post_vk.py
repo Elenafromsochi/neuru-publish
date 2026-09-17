@@ -4,6 +4,10 @@ from datetime import datetime, timezone, timedelta
 
 # Автопостинг в сообщество ВКонтакте.
 #
+# fix57: ссылка в первом комментарии есть всегда: если в посте нет строки
+#   [В КОММЕНТАРИЙ] и ссылки, ставится стандартная ссылка с UTM.
+#   Комментарий пробуется обоими ключами, ошибка видна в Annotations.
+#
 # fix56: общая очередь за несколько дней.
 # — В очередь попадают неопубликованные посты из social/posting/<дата>/vk
 #   за сегодня и за прошлые дни (POST_BACKLOG_DAYS, по умолчанию 14).
@@ -174,8 +178,11 @@ def prepare(md_path, num, folder):
     if m:
         comment_text = m.group(1).strip()
         text = text[:m.start()] + text[m.end():]
+        if not re.search(r'https?://', comment_text):
+            day_tag = folder.parent.name[:2]
+            comment_text = (comment_text.rstrip(' :') + ': https://neuru.ru/ai-porter?utm_source=vk'
+                            f'&utm_medium=publication&utm_campaign=pub&utm_content={day_tag}-{num}')
     else:
-        promises = re.search(r'в\s+(?:первом\s+)?комментари', text, flags=re.IGNORECASE)
         link = re.search(r'(?:^|\s)((?:https?://|www\.)\S+)', text)
         if link:
             url = link.group(1).rstrip('.,);')
@@ -186,8 +193,13 @@ def prepare(md_path, num, folder):
             comment_text = text[para_start:para_end].strip()
             text = text[:para_start] + text[para_end:]
             print(f'   пометки [В КОММЕНТАРИЙ] нет — вынес ссылку в комментарий сам: {url[:60]}')
-        elif promises:
-            print('   ⚠ в тексте обещан комментарий, но ссылки нет — комментария не будет')
+        else:
+            # fix57: ни пометки, ни ссылки — комментарий всё равно нужен
+            day_tag = folder.parent.name[:2]
+            url = ('https://neuru.ru/ai-porter?utm_source=vk&utm_medium=publication'
+                   f'&utm_campaign=pub&utm_content={day_tag}-{num}')
+            comment_text = f'Послушать, как отвечает ИИ-портье: {url}'
+            print('   в посте нет ни строки [В КОММЕНТАРИЙ], ни ссылки — ставлю стандартную ссылку в комментарий')
 
     # ВК не понимает markdown — снимаем разметку, заголовок оставляем строкой
     text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
@@ -351,16 +363,22 @@ def publish(md_path, num, folder, day):
     print(f'   опубликовано: https://vk.com/wall-{group_id}_{post_id}')
 
     if comment_text:
-        try:
-            vk('wall.createComment', {
-                'owner_id': '-' + group_id,
-                'post_id': post_id,
-                'from_group': group_id,
-                'message': comment_text,
-            })
-            print('   ссылка добавлена комментарием')
-        except Exception as e:
-            print(f'   комментарий не добавлен: {e}')
+        errs = []
+        for name, tok in photo_tokens()[::-1]:   # сначала VK_ACCESS_TOKEN, потом VK_USER_TOKEN
+            try:
+                vk('wall.createComment', {
+                    'owner_id': '-' + group_id,
+                    'post_id': post_id,
+                    'from_group': group_id,
+                    'message': comment_text,
+                }, tok)
+                print(f'   ссылка добавлена комментарием (ключ {name})')
+                break
+            except Exception as e:
+                errs.append(f'{name}: {e}')
+        else:
+            print(f'::warning title=VK Posting::комментарий к посту {label} не добавлен — ' + ' | '.join(errs))
+            print('   ⚠ комментарий не добавлен: ' + ' | '.join(errs))
 
 
 sent = 0
