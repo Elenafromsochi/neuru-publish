@@ -27,6 +27,10 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      # Pillow перекодирует картинку в JPEG перед загрузкой в ВК
+      - name: Install Pillow
+        run: python3 -m pip install --quiet --user pillow || python3 -m pip install --quiet --break-system-packages pillow || true
+
       - name: Post to VK
         env:
           VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}
